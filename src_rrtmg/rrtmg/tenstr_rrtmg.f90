@@ -314,24 +314,39 @@ contains
 
     integer(mpiint) :: errcnt
     integer(iintegers) :: k
-
+    logical :: err 
     errcnt = 0
-    ierr = maxval(plev) .gt. 1050; errcnt = errcnt+ierr
-    if(ierr) print *,'Pressure above 1050 hPa -- are you sure this is earth?', maxval(plev)
-
-    ierr = minval(plev) .lt. zero; errcnt = errcnt+ierr
-    if(ierr) print *,'Pressure negative -- are you sure this is physically correct?', minval(plev)
-
-    ierr = minval(tlev) .lt. 180 ; errcnt = errcnt+ierr
-    if(ierr) print *,'Temperature is very low -- are you sure RRTMG can handle that?', minval(tlev)
-
-    ierr = maxval(tlev) .gt. 400 ; errcnt = errcnt+ierr
-    if(ierr) print *,'Temperature is very high -- are you sure RRTMG can handle that?', maxval(tlev)
+    err = maxval(plev) .gt. 1050;
+    if(err) then 
+        print *,'Pressure above 1050 hPa -- are you sure this is earth?', maxval(plev)
+        errcnt = errcnt+1 
+    end if 
     
-    if(present(tlay) .and. ldebug) then
+    err = minval(plev) .lt. zero; 
+    if(err) then 
+        print *,'Pressure negative -- are you sure this is physically correct?', minval(plev)
+        errcnt = errcnt+1
+    endif 
+
+    err = minval(tlev) .lt. 180 ;
+    if(err) then 
+        print *,'Temperature is very low -- are you sure RRTMG can handle that?', minval(tlev)
+        errcnt = errcnt+1
+    end if 
+
+    err = maxval(tlev) .gt. 400 ;
+    if(err) then 
+        print *,'Temperature is very high -- are you sure RRTMG can handle that?', maxval(tlev)
+        errcnt = errcnt+1
+    end if 
+    
+    if(present(tlay)) then
       do k=lbound(tlay,1), ubound(tlay,1)
-        ierr = (tlay(k)-tlev(k).ge.zero) .eqv. (tlay(k)-tlev(k+1).gt.zero); errcnt = errcnt+ierr ! different sign says its in between
-        if(ierr) print *,'Layer Temperature not between level temps?', k, tlev(k), '|', tlay(k), '|', tlev(k+1)
+        err = (tlay(k)-tlev(k).ge.zero) .eqv. (tlay(k)-tlev(k+1).gt.zero); errcnt = errcnt+ierr ! different sign says its in between
+        if(err) then 
+            print *,'Layer Temperature not between level temps?', k, tlev(k), '|', tlay(k), '|', tlev(k+1)
+            errcnt = errcnt+1
+        end if 
       enddo
     endif
 
