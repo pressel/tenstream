@@ -70,35 +70,6 @@ contains
     real(ireals),intent(in),dimension(:) :: plev, tlev
     real(ireals),intent(in),dimension(:),optional :: tlay
 
-<<<<<<< HEAD
-    integer(iintegers) ::  errcnt
-    logical :: ierr
- 
-    errcnt = 0
-    ierr = maxval(plev) .gt. 1050; 
-    if(ierr) then 
-        print *,'Pressure above 1050 hPa -- are you sure this is earth?', maxval(plev)
-        errcnt = errcnt + 1 
-    endif
-
-    ierr = minval(plev) .lt. zero; 
-    if(ierr) then  
-        print *,'Pressure negative -- are you sure this is physically correct?', minval(plev)
-        errcnt = errcnt + 1 
-    endif 
-    
-    ierr = minval(tlev) .lt. 180 ;
-    if(ierr) then
-        print *,'Temperature is very low -- are you sure RRTMG can handle that?', minval(tlev)
-        errcnt = errcnt + 1
-    endif 
-
-    ierr = maxval(tlev) .gt. 400 ;
-    if(ierr) then 
-        print *,'Temperature is very high -- are you sure RRTMG can handle that?', maxval(tlev)
-        errcnt = errcnt + 1
-    endif 
-=======
     integer(iintegers) :: ierr, errcnt
     logical :: lerr
 
@@ -126,8 +97,6 @@ contains
       print *,'Temperature is very high -- are you sure RRTMG can handle that?', maxval(tlev)
       errcnt = errcnt+1
     endif
->>>>>>> upstream/master
-
     if(errcnt.gt.0) then
       print *,'Found wonky input to tenstream_rrtm_lw -- please check! -- will abort now.'
       call CHKERR(errcnt)
