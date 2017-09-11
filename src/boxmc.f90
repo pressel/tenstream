@@ -5,12 +5,12 @@
 ! it under the terms of the GNU General Public License as published by
 ! the Free Software Foundation, either version 3 of the License, or
 ! (at your option) any later version.
-! 
+!
 ! This program is distributed in the hope that it will be useful,
 ! but WITHOUT ANY WARRANTY; without even the implied warranty of
 ! MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 ! GNU General Public License for more details.
-! 
+!
 ! You should have received a copy of the GNU General Public License
 ! along with this program.  If not, see <http://www.gnu.org/licenses/>.
 !
@@ -25,27 +25,26 @@ module m_boxmc
   use ifport
 #endif
 #ifdef _XLF
-  use ieee_arithmetic 
+  use ieee_arithmetic
 #define isnan ieee_is_nan
 #endif
 
-  use m_helper_functions_dp, only : approx,mean,rmse,imp_reduce_sum,norm,deg2rad
+  use m_helper_functions_dp, only : approx, mean, rmse, imp_reduce_sum, norm, deg2rad, compute_normal_3d, hit_plane, spherical_2_cartesian
   use m_helper_functions, only : CHKERR
   use iso_c_binding
   use m_mersenne
   use mpi
-  use m_data_parameters, only: mpiint,iintegers,ireals,ireal_dp,i0,i1,i2,i3,i4,i5,i6,i7,i8,i9,i10, inil
+  use m_data_parameters, only: mpiint,iintegers,ireals,ireal_dp,i0,i1,i2,i3,i4,i5,i6,i7,i8,i9,i10, inil, pi_dp
 
   use m_optprop_parameters, only : delta_scale_truncate,stddev_atol,stddev_rtol,ldebug_optprop
 
   implicit none
 
   private
-  public :: t_boxmc,t_boxmc_8_10,t_boxmc_1_2,t_boxmc_3_10
+  public :: t_boxmc, t_boxmc_8_10, t_boxmc_1_2, t_boxmc_3_10, t_boxmc_wedge_5_5
 
   integer,parameter :: fg=1,bg=2,tot=3
-  real(ireal_dp),parameter :: zero=0, one=1 ,nil=-9999 ,pi=3.141592653589793
-
+  real(ireal_dp),parameter :: zero=0, one=1 ,nil=-9999
 
   integer(mpiint) :: mpierr,myid,numnodes
 
@@ -58,7 +57,7 @@ module m_boxmc
     logical :: initialized=.False.
   contains
     procedure :: init
-    procedure :: get_coeff         
+    procedure :: get_coeff
     procedure :: move_photon
     procedure(intersect_distance),deferred :: intersect_distance
 
@@ -69,7 +68,7 @@ module m_boxmc
   end type
 
   type,extends(t_boxmc) :: t_boxmc_1_2
-  contains 
+  contains
     procedure :: intersect_distance => intersect_distance_1_2
     procedure :: init_dir_photon    => init_dir_photon_1_2
     procedure :: init_diff_photon   => init_diff_photon_1_2
@@ -78,7 +77,7 @@ module m_boxmc
   end type t_boxmc_1_2
 
   type,extends(t_boxmc) :: t_boxmc_8_10
-  contains 
+  contains
     procedure :: intersect_distance => intersect_distance_8_10
     procedure :: init_dir_photon    => init_dir_photon_8_10
     procedure :: init_diff_photon   => init_diff_photon_8_10
@@ -87,13 +86,22 @@ module m_boxmc
   end type t_boxmc_8_10
 
   type,extends(t_boxmc) :: t_boxmc_3_10
-  contains 
+  contains
     procedure :: intersect_distance => intersect_distance_3_10
     procedure :: init_dir_photon    => init_dir_photon_3_10
     procedure :: init_diff_photon   => init_diff_photon_3_10
     procedure :: update_dir_stream  => update_dir_stream_3_10
     procedure :: update_diff_stream => update_diff_stream_3_10
   end type t_boxmc_3_10
+
+  type,extends(t_boxmc) :: t_boxmc_wedge_5_5
+  contains
+    procedure :: intersect_distance => intersect_distance_wedge_5_5
+    procedure :: init_dir_photon    => init_dir_photon_wedge_5_5
+    procedure :: init_diff_photon   => init_diff_photon_wedge_5_5
+    procedure :: update_dir_stream  => update_dir_stream_wedge_5_5
+    procedure :: update_diff_stream => update_diff_stream_wedge_5_5
+  end type t_boxmc_wedge_5_5
 
   type photon
     real(ireal_dp) :: loc(3)=nil,dir(3)=nil,weight=nil,dx=nil,dy=nil,dz=nil
@@ -142,11 +150,11 @@ module m_boxmc
   end interface
 
   abstract interface
-    subroutine update_dir_stream(bmc,p,S)
+    subroutine update_dir_stream(bmc,p,T)
       import :: t_boxmc,photon,iintegers,ireal_dp
       class(t_boxmc) :: bmc
       type(photon),intent(in) :: p
-      real(ireal_dp),intent(inout) :: S(:)
+      real(ireal_dp),intent(inout) :: T(:)
     end subroutine
   end interface
 
@@ -184,12 +192,10 @@ contains
     real(ireals),intent(in),optional :: inp_rtol                  !< @param[in] inp_rtol if given, determines targeted relative stddeviation
 
 
-    real(ireal_dp) :: S_out(bmc%diff_streams)  
-    real(ireal_dp) :: T_out(bmc%dir_streams)   
-    real(ireal_dp) :: S_tol(bmc%diff_streams)  
-    real(ireal_dp) :: T_tol(bmc%dir_streams)   
-
-    real(ireal_dp)   :: time(2)
+    real(ireal_dp) :: S_out(bmc%diff_streams)
+    real(ireal_dp) :: T_out(bmc%dir_streams)
+    real(ireal_dp) :: S_tol(bmc%diff_streams)
+    real(ireal_dp) :: T_tol(bmc%dir_streams)
 
     real(ireal_dp) :: atol,rtol, coeffnorm
 
@@ -222,12 +228,15 @@ contains
       call exit
     endif
 
+    if( any([phi0,theta0].lt.0) .or. (phi0.gt.360_ireals) .or. (theta0.gt.180_ireals) ) then
+      print *,'corrupt sun angles :: ',phi0, theta0
+      call exit
+    endif
+
     if(dx.le.zero .or. dy.le.zero .or. dz.le.zero ) then
       print *,'ERROR: box dimensions have to be positive!',dx,dy,dz
       call exit()
     endif
-
-    call cpu_time(time(1))
 
     call run_photons(bmc,src,                   &
                      real(op_bg,kind=ireal_dp), &
@@ -241,7 +250,7 @@ contains
 
 
     S_out = std_Sdiff%mean
-    T_out = std_Sdir%mean 
+    T_out = std_Sdir%mean
 
     ! tolerances that we achieved and report them back
     S_tol = std_Sdiff%var
@@ -255,7 +264,7 @@ contains
     ! some debug output at the end...
     coeffnorm = sum(S_out)+sum(T_out)
     if( coeffnorm.gt.one ) then
-      if(coeffnorm.ge.one+1e-8_ireal_dp) then
+      if(coeffnorm.ge.one+1e-5_ireal_dp) then
         print *,'ohoh something is wrong! - sum of streams is bigger 1, this cant be due to energy conservation',&
         sum(S_out),'+',sum(T_out),'=',sum(S_out)+sum(T_out),'.gt',one,':: op',op_bg,'eps',epsilon(one)
         call exit
@@ -271,6 +280,7 @@ contains
     endif
     if( (any(isnan(S_out) )) .or. (any(isnan(T_out)) ) ) then
       print *,'Found a NaN in output! this should not happen! dir',T_out,'diff',S_out
+      print *,'Input:', op_bg, '::', phi0, theta0, src, ldir, '::', dx,dy,dz
       call exit()
     endif
 
@@ -279,12 +289,6 @@ contains
     ret_S_tol = real(S_tol, kind=ireals)
     ret_T_tol = real(T_tol, kind=ireals)
 
-    call cpu_time(time(2))
-
-    !    if(rand().gt..99_ireal_dp) then
-    !      write(*,FMT='("src ",I0," dz",I0," op ",3(ES12.3),"(delta",3(ES12.3),") sun(,",I0,I0,") N_phot ",ES12.3," =>",ES12.3,"phot/sec/node took",ES12.3,"sec" )') &
-    !        src,int(dz),op_bg,p%optprop,int(phi0),int(theta0),total_photons,total_photons/max(epsilon(time),time(2)-time(1))/numnodes,time(2)-time(1)
-    !    endif
   end subroutine
 
   subroutine run_photons(bmc,src,op,dx,dy,dz,ldir,phi0,theta0,Nphotons,std_Sdir,std_Sdiff,std_abso)
@@ -298,16 +302,20 @@ contains
       type(photon)       :: p
       integer(iintegers) :: k,mycnt,mincnt
       real(ireal_dp)   :: initial_dir(3)
+      real(ireal_dp)   :: time(2)
 
-      initial_dir  = [ sin(deg2rad(theta0))*sin(deg2rad(phi0)) ,&
-                       sin(deg2rad(theta0))*cos(deg2rad(phi0)) ,&
-                     - cos(deg2rad(theta0)) ]
-      initial_dir = initial_dir/norm(initial_dir)
 
-      mincnt= max( 100, int( 1e4 /numnodes ) )
-      mycnt = int(1e9)/numnodes
+      call cpu_time(time(1))
+
+      ! we turn the initial direction in x and y, against the convetion of sun angles...
+      ! i.e. here we have azimuth phi = 0, beam going towards the north
+      ! and phi = 90, beam going towards east
+      initial_dir = spherical_2_cartesian(phi0, theta0) * [-one, -one, one]
+
+      mincnt= max( 1000, int( 1e3 /numnodes ) )
+      mycnt = int(1e8)/numnodes
       mycnt = min( max(mincnt, mycnt ), huge(k)-1 )
-      do k=1,mycnt
+      do k=1, mycnt
 
           if(k.gt.mincnt .and. all([std_Sdir%converged, std_Sdiff%converged, std_abso%converged ]) ) exit
 
@@ -338,11 +346,18 @@ contains
               call bmc%update_diff_stream(p,std_Sdiff%inc)
           endif
 
-          if(ldir)call std_update( std_Sdir , k, i1*numnodes )
+          if (ldir) call std_update( std_Sdir , k, i1*numnodes )
           call std_update( std_abso , k, i1*numnodes)
           call std_update( std_Sdiff, k, i1*numnodes )
       enddo ! k photons
       Nphotons = k
+
+      call cpu_time(time(2))
+
+      !if(rand().gt..99_ireal_dp) then
+      !  write(*,FMT='("src ",I0," dz",I0," op ",3(ES12.3),"(delta",3(ES12.3),") sun(",I0,",",I0,") N_phot ",I0 ,"=>",ES12.3,"phot/sec/node took",ES12.3,"sec")') &
+      !    src,int(dz),op,p%optprop,int(phi0),int(theta0),Nphotons, Nphotons/max(epsilon(time),time(2)-time(1))/numnodes,time(2)-time(1)
+      !endif
   end subroutine
 
   !> @brief take weighted average over mpi processes
@@ -365,7 +380,7 @@ contains
     call reduce_var(comm, Nlocal, Nglobal, S_tol)
     call reduce_var(comm, Nlocal, Nglobal, T_tol)
 
-  contains 
+  contains
     subroutine reduce_var(comm, Nlocal, Nglobal, arr)
       integer(iintegers),intent(in) :: Nlocal
       real(ireal_dp),intent(in) :: Nglobal
@@ -407,7 +422,7 @@ contains
 
     if(angle.gt.delta_scale_truncate) then
       p%direct = .True.
-      !          print *,'delta scaling photon initial', initial_dir,'dir',p%dir,'angle',angle,'cos', (acos(angle))*180/pi
+      !          print *,'delta scaling photon initial', initial_dir,'dir',p%dir,'angle',angle,'cos', (acos(angle))*180/pi_dp
     endif
   end subroutine
 
@@ -417,13 +432,13 @@ contains
     s = -one + 2*R()
   end function
   !> @brief return cosine of deg(in degrees)
-  function deg2mu(deg) 
+  function deg2mu(deg)
     real(ireal_dp),intent(in) :: deg
     real(ireal_dp) :: deg2mu
     deg2mu = cos(deg2rad(deg))
   end function
   !> @brief return uniform random number between a and b
-  function interv_R(a,b) 
+  function interv_R(a,b)
     real(ireal_dp),intent(in) :: a,b
     real(ireal_dp) :: interv_R
     real(ireal_dp) :: lb,ub
@@ -432,7 +447,7 @@ contains
     ub=max(a,b)
     interv_R = lb + R()*(ub-lb)
   end function
-  !> @brief return uniform random number between [0,v] with a certain cutoff at the edges to make sure that photons are started ``inside`` a box 
+  !> @brief return uniform random number between [0,v] with a certain cutoff at the edges to make sure that photons are started ``inside`` a box
   function L(v)
     real(ireal_dp) :: L
     real(ireal_dp),intent(in) ::v
@@ -458,14 +473,13 @@ contains
       call update_photon_loc(p,dist)
     endif
 
-    if(p%scattercnt.gt.1e9) then 
+    if(p%scattercnt.gt.1e9) then
       print *,'Scattercnt:',p%scattercnt,' -- maybe this photon got stuck? -- I will move this one out of the box but keep in mind, that this is a dirty hack i.e. absorption will be wrong!'
       call print_photon(p)
       p%alive=.False.
       call update_photon_loc(p,intersec_dist)
       call print_photon(p)
     endif
-
 
   contains
 
@@ -500,23 +514,6 @@ contains
       tau = -log(arg)
     end function
   end subroutine move_photon
-
-  pure function hit_plane(p,po_i,pn_i)
-    real(ireal_dp) :: hit_plane
-    type(photon),intent(in) :: p
-    real(ireal_dp),intent(in) :: po_i(3),pn_i(3)
-    real(ireal_dp) :: po(3),pn(3)
-    real(ireal_dp) :: discr
-    po = po_i
-    pn = pn_i
-    discr = dot_product(p%dir,pn)
-    if( ( discr.le. epsilon(discr) ) .and. ( discr.gt.-epsilon(discr)  ) ) then
-      hit_plane=huge(hit_plane)
-    else        
-      hit_plane = dot_product(po-p%loc, pn) / discr
-    endif
-  end function
-
 
   !> @brief cumulative sum of henyey greenstein phase function
   elemental function hengreen(r,g)
@@ -557,11 +554,11 @@ contains
     p%scattercnt = p%scattercnt+1
     p%direct=.False.
 
-    muxs = p%dir(1)  
-    muys = p%dir(2)  
-    muzs = p%dir(3)  
+    muxs = p%dir(1)
+    muys = p%dir(2)
+    muzs = p%dir(3)
 
-    fi = R()*pi*2.
+    fi = R()*pi_dp*2
 
     costheta = (mutheta)
     sintheta = sqrt(one-costheta**2)
@@ -607,7 +604,7 @@ contains
     real(ireal_dp) :: get_g
     type(photon),intent(in) :: p
     get_g = p%optprop(3)
-  end function    
+  end function
 
   subroutine print_photon(p)
     type(photon),intent(in) :: p
@@ -617,12 +614,16 @@ contains
     print *,'weight',p%weight,'alive,direct',p%alive,p%direct,'scatter count',p%scattercnt
     print *,'side',p%side,'src',p%src
     print *,'kabs,ksca,g',get_kabs(p),get_ksca(p),get_g(p)
+    print *,'dx,dy,dz', p%dx, p%dy, p%dz
   end subroutine
 
   function R()
     real(ireal_dp) :: R
-    R = getRandomDouble(rndSeq)
-    !    call random_number(R)
+    real :: rvec(1)
+    ! R = getRandomDouble(rndSeq) ! mersenne twister from robert pinucs, see mersenne.f90
+    ! call random_number(R)
+    call RANLUX(rvec,1)  ! use Luxury Pseudorandom Numbers from M. Luscher
+    R = real(rvec(1), kind=ireal_dp)
   end function
 
   subroutine init_random_seed(myid)
@@ -642,11 +643,12 @@ contains
     DEALLOCATE(seed)
 
     call random_number(rn)
-    s = int(rn*1000)*myid
+    s = int(rn*1000)*(myid+1)
 
     !  s=myid
     !  print *,myid,'Seeding RNG with ',s
-    rndSeq = new_RandomNumberSequence(seed=s)
+    rndSeq = new_RandomNumberSequence(seed=s) ! seed pincus's mersenne twister
+    call RLUXGO(4, int(s), 0, 0) ! seed ranlux rng
     lRNGseeded=.True.
   end subroutine
   subroutine init_stddev( std, N, atol, rtol)
@@ -718,6 +720,9 @@ contains
     class is (t_boxmc_1_2)
     bmc%dir_streams  =  1
     bmc%diff_streams =  2
+    class is (t_boxmc_wedge_5_5)
+    bmc%dir_streams  =  5
+    bmc%diff_streams =  5
     class default
     stop 'initialize: unexpected type for boxmc object!'
   end select
@@ -729,5 +734,6 @@ end subroutine
 include 'boxmc_8_10.inc'
 include 'boxmc_3_10.inc'
 include 'boxmc_1_2.inc'
+include 'boxmc_wedge_5_5.inc'
 
 end module

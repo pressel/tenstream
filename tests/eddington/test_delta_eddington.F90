@@ -2,7 +2,7 @@
 subroutine test_eddington(this)
 
     use m_eddington
-    use m_data_parameters, only: ireals
+    use m_data_parameters, only: ireals, default_str_len
 
     use pfunit_mod
 
@@ -18,7 +18,7 @@ subroutine test_eddington(this)
     print *,'Checking some Eddington coefficient edge cases'
 
     inp = [ 0.4824516550E-01, 0.5542391539, 0.4550637007, 1.00000000000]
-    targ= [ 0.95261097394214145, 5.2909331835333112E-003, 0.00000000000000000, 6.15807017E-04,  0.95290014020107339, 1.00000000000000000, 0.89152080143249124 ]
+    targ= [ 0.95261097394214145, 5.2909331835333112E-003, 0.00000000000000000, 0.00000000000000000,  0.95290014020107339, 1.00000000000000000, 0.89152080143249124 ]
     call calc(inp,out)
     call check_out(inp,out,targ)
 
@@ -90,7 +90,7 @@ subroutine test_eddington(this)
     subroutine check_out(inp,out,targ)
         real(ireals),intent(in) :: inp(:)
         real(ireals),intent(in) :: out(:),targ(:)
-        character(len=250) :: msg
+        character(default_str_len) :: msg
 
         print *,''
         print *,'-----------------------'

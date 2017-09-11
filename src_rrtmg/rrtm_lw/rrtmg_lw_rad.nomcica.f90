@@ -53,7 +53,7 @@
 ! ****************************************************************************
 
 ! -------- Modules --------
-      use m_tenstr_parkind, only : im => kind_im, rb => kind_rb
+      use m_tenstr_parkind_lw, only : im => kind_im, rb => kind_rb
       use m_tenstr_rrlw_vsn
       use m_tenstr_rrtmg_lw_cldprop, only: cldprop
 ! *** Move the required call to rrtmg_lw_ini below and the following 
@@ -531,7 +531,7 @@
          endif
 
          do ig=1,ngptlw
-           tenstr_tau(iplon, :, ig) = taut(1:nlay, ig) + taucloud(1:nlay, ngb(ig)) * cldfrac(:)
+           tenstr_tau(iplon, :, ig) = taut(1:nlay, ig) + taucloud(1:nlay, ngb(ig)) * cldfrac(1:nlay)
            tenstr_Bfrac(iplon, :, ig) = fracs(1:nlay,ig)
          enddo
 

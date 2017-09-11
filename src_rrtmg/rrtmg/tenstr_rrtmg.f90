@@ -5,12 +5,12 @@
 ! it under the terms of the GNU General Public License as published by
 ! the Free Software Foundation, either version 3 of the License, or
 ! (at your option) any later version.
-! 
+!
 ! This program is distributed in the hope that it will be useful,
 ! but WITHOUT ANY WARRANTY; without even the implied warranty of
 ! MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 ! GNU General Public License for more details.
-! 
+!
 ! You should have received a copy of the GNU General Public License
 ! along with this program.  If not, see <http://www.gnu.org/licenses/>.
 !
@@ -18,7 +18,7 @@
 !-------------------------------------------------------------------------
 
 !> \page Routines to call tenstream with optical properties from RRTM
-!! The function `tenstream_rrtmg` provides an easy interface to 
+!! The function `tenstream_rrtmg` provides an easy interface to
 !! couple the TenStream solvers to a host model.
 !!
 !! * Tasks that have to be performed:
@@ -35,8 +35,10 @@
 module m_tenstr_rrtmg
 
       use mpi, only : mpi_comm_rank
-      use m_tenstr_parkind, only: im => kind_im, rb => kind_rb
-      use m_data_parameters, only : init_mpi_data_parameters, iintegers, ireals, myid, zero, one, i0, i1, mpiint, pi, mpierr
+      use m_tenstr_parkind_sw, only: im => kind_im, rb => kind_rb
+      use m_data_parameters, only : init_mpi_data_parameters, &
+        iintegers, ireals, myid, zero, one, i0, i1, &
+        mpiint, pi, mpierr, default_str_len
       use m_tenstream, only : init_tenstream, set_angles, set_optical_properties, solve_tenstream, destroy_tenstream, need_new_solution, &
           tenstream_get_result, tenstream_get_result_toZero, C_one, C_one1
       use m_helper_functions, only : read_ascii_file_2d, gradient, meanvec, imp_bcast, &
@@ -65,19 +67,19 @@ module m_tenstr_rrtmg
 
   type t_atm
     real(ireals),allocatable :: plev   (:) ! dim(nlay+1)
-    real(ireals),allocatable :: tlev   (:) ! 
-    real(ireals),allocatable :: zt     (:) ! 
-    real(ireals),allocatable :: h2o_lev(:) ! 
+    real(ireals),allocatable :: tlev   (:) !
+    real(ireals),allocatable :: zt     (:) !
+    real(ireals),allocatable :: h2o_lev(:) !
     real(ireals),allocatable :: o3_lev (:) !
     real(ireals),allocatable :: co2_lev(:) !
     real(ireals),allocatable :: ch4_lev(:) !
     real(ireals),allocatable :: n2o_lev(:) !
     real(ireals),allocatable :: o2_lev (:) !
 
-    real(ireals),allocatable :: play   (:) ! dim(nlay) 
-    real(ireals),allocatable :: zm     (:) ! 
-    real(ireals),allocatable :: dz     (:) ! 
-    real(ireals),allocatable :: tlay   (:) ! 
+    real(ireals),allocatable :: play   (:) ! dim(nlay)
+    real(ireals),allocatable :: zm     (:) !
+    real(ireals),allocatable :: dz     (:) !
+    real(ireals),allocatable :: tlay   (:) !
     real(ireals),allocatable :: h2o_lay(:) !
     real(ireals),allocatable :: o3_lay (:) !
     real(ireals),allocatable :: co2_lay(:) !
@@ -91,7 +93,7 @@ contains
   subroutine tenstream_rrtmg(comm, dx, dy, phi0, theta0, &
       albedo_thermal, albedo_solar, atm_filename,     &
       lthermal, lsolar,                               &
-      edir,edn,eup,abso,                              & 
+      edir,edn,eup,abso,                              &
       d_plev, d_tlev, d_tlay, d_h2ovmr, d_o3vmr,      &
       d_co2vmr, d_ch4vmr, d_n2ovmr,  d_o2vmr,         &
       d_lwc, d_reliq, d_iwc, d_reice,                 &
@@ -107,7 +109,7 @@ contains
 
     ! Filename of background atmosphere file. ASCII file with columns:
     ! z(km)  p(hPa)  T(K)  air(cm-3)  o3(cm-3) o2(cm-3) h2o(cm-3)  co2(cm-3) no2(cm-3)
-    character(len=250), intent(in) :: atm_filename
+    character(default_str_len), intent(in) :: atm_filename
 
     ! Compute solar or thermal radiative transfer. Or compute both at once.
     logical, intent(in) :: lsolar, lthermal
@@ -119,7 +121,7 @@ contains
     ! all have dim(nlay_dynamics, nxp, nyp)
     real(ireals),intent(in),optional :: d_tlay   (:,:,:) ! layer mean temperature [K]
     real(ireals),intent(in),optional :: d_h2ovmr (:,:,:) ! watervapor volume mixing ratio [e.g. 1e-3]
-    real(ireals),intent(in),optional :: d_o3vmr  (:,:,:) ! ozone volume mixing ratio      [e.g. .1e-6] 
+    real(ireals),intent(in),optional :: d_o3vmr  (:,:,:) ! ozone volume mixing ratio      [e.g. .1e-6]
     real(ireals),intent(in),optional :: d_co2vmr (:,:,:) ! CO2 volume mixing ratio        [e.g. 407e-6]
     real(ireals),intent(in),optional :: d_ch4vmr (:,:,:) ! methane volume mixing ratio    [e.g. 2e-6]
     real(ireals),intent(in),optional :: d_n2ovmr (:,:,:) ! n2o volume mixing ratio        [e.g. .32]
@@ -133,12 +135,12 @@ contains
     ! nyproc dimension of nyproc is number of ranks along y-axis, and entries in nyproc are the number of local Ny
     ! if not present, we let petsc decide how to decompose the fields(probably does not fit the decomposition of a host model)
     integer(iintegers),intent(in),optional :: nxproc(:), nyproc(:)
-   
+
     integer(iintegers),intent(in),optional :: icollapse ! experimental, dont use it if you dont know what you are doing.
 
     ! opt_time is the model time in seconds. If provided we will track the error growth of the solutions and compute new solutions only after threshold estimate is exceeded.
     ! If solar_albedo_2d is present, we use a 2D surface albedo
-    real(ireals), optional, intent(in) :: opt_time, solar_albedo_2d(:,:) 
+    real(ireals), optional, intent(in) :: opt_time, solar_albedo_2d(:,:)
 
 
     ! Fluxes and absorption in [W/m2] and [W/m3] respectively.
@@ -178,8 +180,8 @@ contains
     real(ireals),allocatable :: dz(:,:,:), dz_t2b(:,:,:) ! dz (t2b := top 2 bottom)
 
     ! for debug purposes, can output variables into netcdf files
-    character(len=80) :: output_path(2) ! [ filename, varname ]
-    logical :: lfile_exists
+    !character(default_str_len) :: output_path(2) ! [ filename, varname ]
+    !logical :: lfile_exists
 
     call load_atmfile(comm, atm_filename, bg_atm)
 
@@ -264,7 +266,7 @@ contains
 
     if(lsolar) then
       allocate(edir (C_one1%zm, C_one1%xm, C_one1%ym), source=zero)
-      call compute_solar(is, ie, js, je, ks, ke, ke1, &
+      call compute_solar(is, ie, js, je, ke, &
         phi0, theta0, &
         albedo_solar, dz_t2b, col_plev, col_tlev, col_tlay, col_h2ovmr, &
         col_o3vmr, col_co2vmr, col_ch4vmr, col_n2ovmr, col_o2vmr, &
@@ -314,39 +316,40 @@ contains
 
     integer(mpiint) :: errcnt
     integer(iintegers) :: k
-    logical :: err 
+    logical :: lerr
+
     errcnt = 0
-    err = maxval(plev) .gt. 1050;
-    if(err) then 
-        print *,'Pressure above 1050 hPa -- are you sure this is earth?', maxval(plev)
-        errcnt = errcnt+1 
-    end if 
-    
-    err = minval(plev) .lt. zero; 
-    if(err) then 
-        print *,'Pressure negative -- are you sure this is physically correct?', minval(plev)
-        errcnt = errcnt+1
-    endif 
+    lerr = maxval(plev) .gt. 1050
+    if(lerr) then
+      print *,'Pressure above 1050 hPa -- are you sure this is earth?', maxval(plev)
+      errcnt = errcnt+1
+    endif
 
-    err = minval(tlev) .lt. 180 ;
-    if(err) then 
-        print *,'Temperature is very low -- are you sure RRTMG can handle that?', minval(tlev)
-        errcnt = errcnt+1
-    end if 
+    lerr = minval(plev) .lt. zero
+    if(lerr) then
+      print *,'Pressure negative -- are you sure this is physically correct?', minval(plev)
+      errcnt = errcnt+1
+    endif
 
-    err = maxval(tlev) .gt. 400 ;
-    if(err) then 
-        print *,'Temperature is very high -- are you sure RRTMG can handle that?', maxval(tlev)
-        errcnt = errcnt+1
-    end if 
-    
-    if(present(tlay)) then
+    lerr = minval(tlev) .lt. 180
+    if(lerr) then
+      print *,'Temperature is very low -- are you sure RRTMG can handle that?', minval(tlev)
+      errcnt = errcnt+1
+    endif
+
+    lerr = maxval(tlev) .gt. 400
+    if(lerr) then
+      print *,'Temperature is very high -- are you sure RRTMG can handle that?', maxval(tlev)
+      errcnt = errcnt+1
+    endif
+
+    if(present(tlay) .and. ldebug) then
       do k=lbound(tlay,1), ubound(tlay,1)
-        err = (tlay(k)-tlev(k).ge.zero) .eqv. (tlay(k)-tlev(k+1).gt.zero); errcnt = errcnt+ierr ! different sign says its in between
-        if(err) then 
-            print *,'Layer Temperature not between level temps?', k, tlev(k), '|', tlay(k), '|', tlev(k+1)
-            errcnt = errcnt+1
-        end if 
+        lerr = (tlay(k)-tlev(k).ge.zero) .eqv. (tlay(k)-tlev(k+1).gt.zero) ! different sign says its in between
+        if(lerr) then
+          print *,'Layer Temperature not between level temps?', k, tlev(k), '|', tlay(k), '|', tlev(k+1)
+          errcnt = errcnt+1
+        endif
       enddo
     endif
 
@@ -428,14 +431,14 @@ contains
     allocate(spec_abso(C_one%zm , C_one%xm , C_one%ym ))
 
     need_any_new_solution=.False.
-    do ib=1,ngptlw 
+    do ib=1,ngptlw
       if(need_new_solution(500+ib, opt_time)) need_any_new_solution=.True.
     enddo
     if(.not.need_any_new_solution) then
-      do ib=1,ngptlw 
+      do ib=1,ngptlw
         call tenstream_get_result(spec_edir, spec_edn, spec_eup, spec_abso, opt_solution_uid=500+ib)
-        edn  = edn  + spec_edn 
-        eup  = eup  + spec_eup 
+        edn  = edn  + spec_edn
+        eup  = eup  + spec_eup
         abso = abso + spec_abso
       enddo
       return
@@ -498,31 +501,31 @@ contains
     deallocate(col_Bfrac )
 
     ! Loop over spectral intervals and call solver
-    do ib=1,ngptlw 
+    do ib=1,ngptlw
       if(need_new_solution(500+ib, opt_time)) then
         call set_optical_properties(albedo, kabs(:,:,:,ib), ksca(:,:,:), g(:,:,:), Blev(:,:,:,ngb(ib))*Bfrac(:,:,:,ib))
         call solve_tenstream(zero, opt_solution_uid=500+ib, opt_solution_time=opt_time)
       endif
       call tenstream_get_result(spec_edir, spec_edn, spec_eup, spec_abso, opt_solution_uid=500+ib)
 
-      edn  = edn  + spec_edn 
-      eup  = eup  + spec_eup 
+      edn  = edn  + spec_edn
+      eup  = eup  + spec_eup
       abso = abso + spec_abso
     enddo
   end subroutine compute_thermal
 
-  subroutine compute_solar(is, ie, js, je, ks, ke, ke1, &
+  subroutine compute_solar(is, ie, js, je, ke, &
       phi0, theta0, &
       albedo, dz_t2b, col_plev, col_tlev, col_tlay, col_h2ovmr, &
       col_o3vmr, col_co2vmr, col_ch4vmr, col_n2ovmr, col_o2vmr, &
       col_lwp, col_reliq, col_iwp, col_reice,                   &
       edir, edn, eup, abso, opt_time, solar_albedo_2d, phi2d, theta2d)
 
-      use m_tenstr_parrrsw, only: ngptsw, nbndsw,naerec,jpb1, jpb2
-      use m_tenstr_rrtmg_sw_spcvrt, only: tenstr_solsrc      
+      use m_tenstr_parrrsw, only: ngptsw
+      use m_tenstr_rrtmg_sw_spcvrt, only: tenstr_solsrc
 
 
-    integer(iintegers),intent(in) :: is,ie, js,je, ks,ke,ke1
+    integer(iintegers),intent(in) :: is,ie, js,je, ke
 
     real(ireals),intent(in) :: albedo, dz_t2b(:,:,:)
     real(ireals),intent(in) :: phi0, theta0
@@ -551,7 +554,7 @@ contains
     real(ireals),allocatable, dimension(:,:,:,:) :: kabs, ksca, g                  ! [nlyr, local_nx, local_ny, ngptsw]
     real(ireals),allocatable, dimension(:,:,:)   :: spec_edir, spec_edn,spec_eup,spec_abso    ! [nlyr(+1), local_nx, local_ny ]
 
-    integer(iintegers) :: i, j, k, icol, ib
+    integer(iintegers) :: i, j, icol, ib
     logical :: need_any_new_solution
 
     allocate(spec_edir(C_one1%zm, C_one1%xm, C_one1%ym))
@@ -560,15 +563,15 @@ contains
     allocate(spec_abso(C_one%zm , C_one%xm , C_one%ym ))
 
     need_any_new_solution=.False.
-    do ib=1,ngptsw 
+    do ib=1,ngptsw
       if(need_new_solution(ib, opt_time)) need_any_new_solution=.True.
     enddo
     if(.not.need_any_new_solution) then
-      do ib=1,ngptsw 
+      do ib=1,ngptsw
         call tenstream_get_result(spec_edir, spec_edn, spec_eup, spec_abso, opt_solution_uid=ib)
         edir = edir + spec_edir
-        edn  = edn  + spec_edn 
-        eup  = eup  + spec_eup 
+        edn  = edn  + spec_edn
+        eup  = eup  + spec_eup
         abso = abso + spec_abso
       enddo
       return
@@ -621,7 +624,7 @@ contains
     call set_angles(phi0, theta0, phi2d=phi2d, theta2d=theta2d)
 
     ! Loop over spectral intervals and call solver
-    do ib=1,ngptsw 
+    do ib=1,ngptsw
 
       if(need_new_solution(ib, opt_time)) then
         call set_optical_properties(albedo, kabs(:,:,:,ib), ksca(:,:,:,ib), g(:,:,:,ib), local_albedo_2d=solar_albedo_2d)
@@ -630,15 +633,16 @@ contains
       call tenstream_get_result(spec_edir, spec_edn, spec_eup, spec_abso, opt_solution_uid=ib)
 
       edir = edir + spec_edir
-      edn  = edn  + spec_edn 
-      eup  = eup  + spec_eup 
+      edn  = edn  + spec_edn
+      eup  = eup  + spec_eup
       abso = abso + spec_abso
     enddo
   end subroutine compute_solar
 
-  subroutine destroy_tenstream_rrtmg()
+  subroutine destroy_tenstream_rrtmg(lfinalizepetsc)
+    logical, intent(in) :: lfinalizepetsc
     ! Tidy up the solver
-    call destroy_tenstream(lfinalizepetsc=.True.)
+    call destroy_tenstream(lfinalizepetsc=lfinalizepetsc)
     linit_tenstr = .False.
   end subroutine
 
@@ -654,7 +658,7 @@ contains
     real(ireals), intent(in) :: albedo
 
     real(rb),dimension(ncol_in,nlay_in+1) :: plev, tlev
-    real(rb),dimension(ncol_in,nlay_in)   :: tlay, h2ovmr, o3vmr, co2vmr, ch4vmr, n2ovmr, o2vmr 
+    real(rb),dimension(ncol_in,nlay_in)   :: tlay, h2ovmr, o3vmr, co2vmr, ch4vmr, n2ovmr, o2vmr
     real(rb),dimension(ncol_in,nlay_in)   :: lwp, reliq, iwp, reice
 
     real(ireals), dimension(:,:,:), intent(out) :: tau, Bfrac ! [ncol, nlay, ngptlw]
@@ -667,7 +671,7 @@ contains
 
     real(rb),dimension(ncol_in, nlay_in)   :: cfc11vmr,cfc12vmr,cfc22vmr,ccl4vmr
 
-    real(rb),dimension(ncol_in) :: tsfc 
+    real(rb),dimension(ncol_in) :: tsfc
 
     real(rb),dimension(ncol_in,nlay_in+1) :: lwuflx,lwdflx,lwuflxc,lwdflxc
     real(rb),dimension(ncol_in,nlay_in  ) :: lwhr,lwhrc
@@ -741,7 +745,7 @@ contains
     integer(iintegers),intent(in)          :: ncol_in, nlay_in
 
     real(rb),dimension(ncol_in,nlay_in+1) :: plev, tlev
-    real(rb),dimension(ncol_in,nlay_in)   :: tlay, h2ovmr, o3vmr, co2vmr, ch4vmr, n2ovmr, o2vmr 
+    real(rb),dimension(ncol_in,nlay_in)   :: tlay, h2ovmr, o3vmr, co2vmr, ch4vmr, n2ovmr, o2vmr
     real(rb),dimension(ncol_in,nlay_in)   :: lwp, reliq, iwp, reice
 
     real(ireals), dimension(:,:,:), intent(out) :: tau, w0, g ! [ncol, nlay, ngptsw]
@@ -780,7 +784,7 @@ contains
     enddo
 
     taucld = 0; ssacld = 0; asmcld  = 0;
-    fsfcld = 0; 
+    fsfcld = 0;
     tauaer = 0; ssaaer  = 0; asmaer  = 0;
     ecaer  = 0; coszen = 1; asdir   = 0; aldir   = 0;
     asdif  = 0; aldif  = 0; swdflxc = 0; swuflxc = 0;
@@ -867,7 +871,7 @@ contains
 
   subroutine load_atmfile(comm, atm_filename, atm)
     integer(mpiint), intent(in) :: comm
-    character(len=250), intent(in) :: atm_filename
+    character(default_str_len), intent(in) :: atm_filename
     type(t_atm),allocatable,intent(inout) :: atm
 
     integer(mpiint) :: myid
@@ -904,7 +908,7 @@ contains
       atm%h2o_lev = prof(:,7) / prof(:,4)
       atm%o3_lev  = prof(:,5) / prof(:,4)
       atm%co2_lev = prof(:,8) / prof(:,4)
-      atm%ch4_lev = atm%co2_lev / 1e2        
+      atm%ch4_lev = atm%co2_lev / 1e2
       atm%n2o_lev = prof(:,9) / prof(:,4)
       atm%o2_lev  = prof(:,6) / prof(:,4)
 
@@ -915,15 +919,15 @@ contains
 
       endif
     endif
-    call imp_bcast(comm, atm%plev   , 0_mpiint, myid)
-    call imp_bcast(comm, atm%zt     , 0_mpiint, myid)
-    call imp_bcast(comm, atm%tlev   , 0_mpiint, myid)
-    call imp_bcast(comm, atm%h2o_lev, 0_mpiint, myid)
-    call imp_bcast(comm, atm%o3_lev , 0_mpiint, myid)
-    call imp_bcast(comm, atm%co2_lev, 0_mpiint, myid)
-    call imp_bcast(comm, atm%ch4_lev, 0_mpiint, myid)
-    call imp_bcast(comm, atm%n2o_lev, 0_mpiint, myid)
-    call imp_bcast(comm, atm%o2_lev , 0_mpiint, myid)
+    call imp_bcast(comm, atm%plev   , 0_mpiint)
+    call imp_bcast(comm, atm%zt     , 0_mpiint)
+    call imp_bcast(comm, atm%tlev   , 0_mpiint)
+    call imp_bcast(comm, atm%h2o_lev, 0_mpiint)
+    call imp_bcast(comm, atm%o3_lev , 0_mpiint)
+    call imp_bcast(comm, atm%co2_lev, 0_mpiint)
+    call imp_bcast(comm, atm%ch4_lev, 0_mpiint)
+    call imp_bcast(comm, atm%n2o_lev, 0_mpiint)
+    call imp_bcast(comm, atm%o2_lev , 0_mpiint)
 
     nlev = size(atm%plev)
 
@@ -951,7 +955,7 @@ contains
   end subroutine
 
   subroutine merge_dyn_rad_grid(comm, atm,     &
-      d_plev, d_tlev, d_tlay, d_h2ovmr,        &
+      in_d_plev, d_tlev, d_tlay, d_h2ovmr,     &
       d_o3vmr, d_co2vmr, d_ch4vmr, d_n2ovmr,   &
       d_o2vmr, d_lwc, d_reliq, d_iwc, d_reice, &
       col_plev, col_tlev, col_tlay,            &
@@ -962,7 +966,7 @@ contains
     integer(mpiint), intent(in) :: comm
     type(t_atm),intent(in) :: atm ! 1D background profile info
 
-    real(ireals),intent(in) :: d_plev (:,:,:), d_tlev(:,:,:) ! dim(nlay_dynamics+1, nxp, nyp)
+    real(ireals),intent(in) :: in_d_plev (:,:,:), d_tlev(:,:,:) ! dim(nlay_dynamics+1, nxp, nyp)
 
     real(ireals),intent(in),optional :: d_tlay   (:,:,:) ! all have
     real(ireals),intent(in),optional :: d_h2ovmr (:,:,:) ! dim(nlay_dynamics, nxp, nyp)
@@ -990,6 +994,8 @@ contains
     real(rb),intent(out),allocatable :: col_iwc    (:,:)
     real(rb),intent(out),allocatable :: col_reice  (:,:)
 
+    real(ireals) :: d_plev (ubound(in_d_plev,1), ubound(in_d_plev,2), ubound(in_d_plev,3))
+
     integer(iintegers) :: d_ke, d_ke1 ! number of vertical levels of dynamics grid
     integer(iintegers) :: atm_ke      ! number of vertical levels of atmosphere grid
 
@@ -1006,6 +1012,11 @@ contains
     d_ke1 = ubound(d_plev,1); d_ke = d_ke1-1
 
     ! find out how many layers we have to put on top of the dynamics grid
+
+    ! first put a tiny increment on the top of dynamics pressure value,
+    ! to handle a cornercase where dynamics and background profile are the same
+    d_plev = in_d_plev
+    d_plev(d_ke1, :, :) = d_plev(d_ke1, :, :) - 1e-3_ireals
 
     ! First get top height of dynamics grid
     allocate(d_hhl(d_ke1, ie, je))
@@ -1035,7 +1046,6 @@ contains
     ! then from there on couple background atm data on top of that
 
     allocate(col_plev   (ie*je, ke1))
-                                     
     allocate(col_tlev   (ie*je, ke1))
     allocate(col_tlay   (ie*je, ke ))
     allocate(col_h2ovmr (ie*je, ke ))
@@ -1055,7 +1065,7 @@ contains
         ! First merge pressure levels .. pressure is always given..
         col_plev(icol, ke1-atm_ke+1:ke1) = rev1d(atm%plev(1:atm_ke))
         col_plev(icol, 1:d_ke1) = d_plev(:,i,j)
-        if(col_plev(icol, ke1-atm_ke+1) .ge. col_plev(icol,d_ke1)) then
+        if(col_plev(icol, ke1-atm_ke+1) .gt. col_plev(icol,d_ke1)) then
           print *,'background profile pressure is .ge. than uppermost pressure &
             & level of dynamics grid -- this suggests the dynamics grid is way &
             & off hydrostatic balance... please check', col_plev(icol,:)

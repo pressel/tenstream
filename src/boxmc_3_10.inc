@@ -5,12 +5,12 @@
 ! it under the terms of the GNU General Public License as published by
 ! the Free Software Foundation, either version 3 of the License, or
 ! (at your option) any later version.
-! 
+!
 ! This program is distributed in the hope that it will be useful,
 ! but WITHOUT ANY WARRANTY; without even the implied warranty of
 ! MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 ! GNU General Public License for more details.
-! 
+!
 ! You should have received a copy of the GNU General Public License
 ! along with this program.  If not, see <http://www.gnu.org/licenses/>.
 !
@@ -18,15 +18,15 @@
 !-------------------------------------------------------------------------
 
 
-subroutine update_dir_stream_3_10(bmc,p,S)
+subroutine update_dir_stream_3_10(bmc,p,T)
         class(t_boxmc_3_10) :: bmc
         type(photon),intent(in) :: p
-        real(ireal_dp),intent(inout) :: S(:)
+        real(ireal_dp),intent(inout) :: T(:)
 
     select case (p%side)
     case(1:2)
       if(p%loc(1).le.p%dx.and.p%loc(2).le.p%dy) then
-        S(1) = S(1)+p%weight
+        T(1) = T(1)+p%weight
         return
       else
         print *,'Couldnt find a stream on to which I can put the photon weight on?!'
@@ -36,7 +36,7 @@ subroutine update_dir_stream_3_10(bmc,p,S)
     case(3:4)
 
       if(p%loc(3).le.p%dz) then
-        S(2) = S(2)+p%weight
+        T(2) = T(2)+p%weight
         return
       else
         print *,'Couldnt find a stream on to which I can put the photon weight on?!'
@@ -45,7 +45,7 @@ subroutine update_dir_stream_3_10(bmc,p,S)
     case(5:6)
 
       if(p%loc(3).le.p%dz ) then
-        S(3) = S(3)+p%weight
+        T(3) = T(3)+p%weight
         return
       else
         print *,'Couldnt find a stream on to which I can put the photon weight on?!'
@@ -145,6 +145,7 @@ subroutine init_dir_photon_3_10(bmc,p,src,direct,initial_dir,dx,dy,dz)
         p%direct= direct
         p%side = int(nil)
         p%src  = src
+        p%scattercnt  = 0
         p%dir = initial_dir
         select type(bmc)
         end select
@@ -204,6 +205,7 @@ subroutine init_diff_photon_3_10(bmc,p,src,dx,dy,dz)
         p%direct= .False.
         p%side = int(nil)
         p%src  = src
+        p%scattercnt  = 0
         if(.not. approx( norm(p%dir) ,one ) ) stop 'init_diff_photon_3_10 :: direction was not normed?!'
 
         select type(bmc)
@@ -223,15 +225,15 @@ subroutine intersect_distance_3_10(bmc,p,max_dist)
 
         !crossing with bottom and top plane:
           if(p%dir(3).ge.zero) then
-            max_dist = hit_plane(p,[zero,zero,p%dz ],[zero,zero,one])
-            p%side=1 
+            max_dist = hit_plane(p%loc, p%dir,[zero,zero,p%dz ],[zero,zero,one])
+            p%side=1
             x = p%loc(1)+p%dir(1)*max_dist
             y = p%loc(2)+p%dir(2)*max_dist
             if( ( x.ge.zero .and. x.le.p%dx) .and. ( y.ge.zero .and. y.le.p%dy) ) return
             dist(1) = max_dist; sides(1) = 1
           endif
           if(p%dir(3).le.zero) then
-            max_dist = hit_plane(p,[zero,zero,zero ],[zero,zero,one])
+            max_dist = hit_plane(p%loc, p%dir,[zero,zero,zero ],[zero,zero,one])
             p%side=2
             x = p%loc(1)+p%dir(1)*max_dist
             y = p%loc(2)+p%dir(2)*max_dist
@@ -241,7 +243,7 @@ subroutine intersect_distance_3_10(bmc,p,max_dist)
 
           !crossing with left and right plane:
           if(p%dir(1).le.zero) then
-            max_dist = hit_plane(p,[ zero ,zero,zero],[one,zero,zero])
+            max_dist = hit_plane(p%loc, p%dir,[ zero ,zero,zero],[one,zero,zero])
             p%side=3
             y = p%loc(2)+p%dir(2)*max_dist
             z = p%loc(3)+p%dir(3)*max_dist
@@ -249,7 +251,7 @@ subroutine intersect_distance_3_10(bmc,p,max_dist)
             dist(2) = max_dist; sides(2) = 3
           endif
           if(p%dir(1).ge.zero) then
-            max_dist = hit_plane(p,[ p%dx ,zero,zero],[one,zero,zero])
+            max_dist = hit_plane(p%loc, p%dir,[ p%dx ,zero,zero],[one,zero,zero])
             p%side=4
             y = p%loc(2)+p%dir(2)*max_dist
             z = p%loc(3)+p%dir(3)*max_dist
@@ -259,7 +261,7 @@ subroutine intersect_distance_3_10(bmc,p,max_dist)
 
           !crossing with back and forward plane:
           if(p%dir(2).le.zero) then
-            max_dist = hit_plane(p,[zero, zero ,zero],[zero,one,zero])
+            max_dist = hit_plane(p%loc, p%dir,[zero, zero ,zero],[zero,one,zero])
             p%side=5
             x = p%loc(1)+p%dir(1)*max_dist
             z = p%loc(3)+p%dir(3)*max_dist
@@ -267,7 +269,7 @@ subroutine intersect_distance_3_10(bmc,p,max_dist)
             dist(3) = max_dist; sides(3) = 5
           endif
           if(p%dir(2).ge.zero) then
-            max_dist = hit_plane(p,[zero, p%dy ,zero],[zero,one,zero])
+            max_dist = hit_plane(p%loc, p%dir,[zero, p%dy ,zero],[zero,one,zero])
             p%side=6
             x = p%loc(1)+p%dir(1)*max_dist
             z = p%loc(3)+p%dir(3)*max_dist

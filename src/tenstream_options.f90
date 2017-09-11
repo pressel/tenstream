@@ -5,12 +5,12 @@
 ! it under the terms of the GNU General Public License as published by
 ! the Free Software Foundation, either version 3 of the License, or
 ! (at your option) any later version.
-! 
+!
 ! This program is distributed in the hope that it will be useful,
 ! but WITHOUT ANY WARRANTY; without even the implied warranty of
 ! MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 ! GNU General Public License for more details.
-! 
+!
 ! You should have received a copy of the GNU General Public License
 ! along with this program.  If not, see <http://www.gnu.org/licenses/>.
 !
@@ -18,7 +18,7 @@
 !-------------------------------------------------------------------------
 
 module m_tenstream_options
-      use m_data_parameters, only : ireals,iintegers,myid,numnodes,one,i0,imp_comm,mpiint
+      use m_data_parameters, only : ireals,iintegers,myid,numnodes,one,i0,imp_comm,mpiint,default_str_len
       use m_optprop_parameters, only: lut_basename, coeff_mode
       use m_helper_functions, only: CHKERR
 
@@ -29,7 +29,6 @@ module m_tenstream_options
 
       logical :: ltwostr  =.False., & ! additionally calculate delta eddington twostream solution
         ltwostr_only      =.False., & ! only calculate twostream
-        lwriteall         =.False., & ! write out each and every solution -- mainly good to debug solver
         luse_eddington    =.True. , & ! use delta eddington coefficients for upper atmosphere            , if False , we use boxmc 2-str coeffs
         luse_hdf5_guess   =.False., & ! try loading initial guess from file
         luse_twostr_guess =.False., & ! use twostream solution as first guess
@@ -46,42 +45,42 @@ module m_tenstream_options
             options_phi,            &
             options_theta,          &
             options_max_solution_err, options_max_solution_time
-                    
+
       integer(iintegers) :: pert_xshift,pert_yshift
 
-      character(len=300) :: ident,output_prefix
-      character(len=300) :: basepath
+      character(len=default_str_len) :: ident,output_prefix
+      character(len=default_str_len) :: basepath
 
-      contains 
+      contains
         subroutine show_options()
-          print *,'------------------------------------------------------------------------------------------------------------------'  
-          print *,'------------------------------------------------------------------------------------------------------------------'  
+          print *,'------------------------------------------------------------------------------------------------------------------'
+          print *,'------------------------------------------------------------------------------------------------------------------'
           print *,'Tenstream options:'
-          print *,'-show_options         :: show this text                                                                           '  
+          print *,'-show_options         :: show this text                                                                           '
           print *,'-ident <run_*>        :: load optical properties from hdf5 -read petsc_solver::load_optprop (default = run_test)  '
           print *,'-ident run_test       :: load optical properties from function in petsc_solver::load_test_optprop                 '
-          print *,'-out                  :: output prefix (default = ts)                                                             '  
-          print *,'-basepath             :: output directory (default = ./)                                                          '  
-          print *,'-dx -dy               :: domain size in [m] (mandatory if running with -ident <run_*> )                           '  
-          print *,'-phi -theta           :: solar azimuth and zenith angle (default = (180,0) == south,overhead sun)                 '  
+          print *,'-out                  :: output prefix (default = ts)                                                             '
+          print *,'-basepath             :: output directory (default = ./)                                                          '
+          print *,'-dx -dy               :: domain size in [m] (mandatory if running with -ident <run_*> )                           '
+          print *,'-phi -theta           :: solar azimuth and zenith angle (default = (180,0) == south,overhead sun)                 '
           print *,'-force_phi/theta      :: force using options provided phi/theta                                                   '
-          print *,'-writeall             :: dump intermediate results                                                                '  
-          print *,'-twostr_only          :: only calculate twostream solution -- dont bother calculating 3D Radiation                ' 
-          print *,'-twostr               :: calculate delta eddington twostream solution                                             ' 
-          print *,'-schwarzschild        :: use schwarzschild solver instead of twostream for thermal calculations                   ' 
-          print *,'-hdf5_guess           :: if run earlier with -writeall can now use dumped solutions as initial guess              '  
-          print *,'-twostr_guess         :: use delta eddington twostream solution as first guess                                    '  
-          print *,'-twostr_ratio <limit> :: when aspect ratio (dz/dx) is smaller than <limit> then we use twostr_coeffs(default = 1.)'  
-          print *,'-calc_nca             :: calculate twostream and modify absorption with NCA algorithm (Klinger)                   '  
-          print *,'-skip_thermal         :: skip thermal calculations and just return zero for flux and absorption                   '  
-          print *,'-topography           :: use raybending to include surface topography, needs a 3D dz information                  '  
-          print *,'-pert_xshift <i>      :: shift optical properties in x direction by <i> pixels                                    '  
-          print *,'-pert_yshift <j>      :: shift optical properties in Y direction by <j> pixels                                    '  
-          print *,'-max_solution_err [W] :: if max error of solution is estimated below this value, skip calculation                 '  
-          print *,'-max_solution_time[s] :: if last update of solution is older, update irrespective of estimated error              '  
-          print *,'-lut_basename         :: path to LUT table files -- default is local dir                                          '  
-          print *,'------------------------------------------------------------------------------------------------------------------'  
-          print *,'------------------------------------------------------------------------------------------------------------------'  
+          print *,'-writeall             :: dump intermediate results                                                                '
+          print *,'-twostr_only          :: only calculate twostream solution -- dont bother calculating 3D Radiation                '
+          print *,'-twostr               :: calculate delta eddington twostream solution                                             '
+          print *,'-schwarzschild        :: use schwarzschild solver instead of twostream for thermal calculations                   '
+          print *,'-hdf5_guess           :: if run earlier with -writeall can now use dumped solutions as initial guess              '
+          print *,'-twostr_guess         :: use delta eddington twostream solution as first guess                                    '
+          print *,'-twostr_ratio <limit> :: when aspect ratio (dz/dx) is smaller than <limit> then we use twostr_coeffs(default = 1.)'
+          print *,'-calc_nca             :: calculate twostream and modify absorption with NCA algorithm (Klinger)                   '
+          print *,'-skip_thermal         :: skip thermal calculations and just return zero for flux and absorption                   '
+          print *,'-topography           :: use raybending to include surface topography, needs a 3D dz information                  '
+          print *,'-pert_xshift <i>      :: shift optical properties in x direction by <i> pixels                                    '
+          print *,'-pert_yshift <j>      :: shift optical properties in Y direction by <j> pixels                                    '
+          print *,'-max_solution_err [W] :: if max error of solution is estimated below this value, skip calculation                 '
+          print *,'-max_solution_time[s] :: if last update of solution is older, update irrespective of estimated error              '
+          print *,'-lut_basename         :: path to LUT table files -- default is local dir                                          '
+          print *,'------------------------------------------------------------------------------------------------------------------'
+          print *,'------------------------------------------------------------------------------------------------------------------'
         end subroutine
         subroutine read_commandline_options()
           logical :: lflg=.False.,lflg_ident=.False.
@@ -125,8 +124,6 @@ module m_tenstream_options
           call PetscOptionsGetBool(PETSC_NULL_OPTIONS, PETSC_NULL_CHARACTER, "-force_theta", lforce_theta, lflg , ierr) ;call CHKERR(ierr)
 
           call PetscOptionsGetBool(PETSC_NULL_OPTIONS, PETSC_NULL_CHARACTER,"-eddington",luse_eddington,lflg,ierr) ;call CHKERR(ierr)
-
-          call PetscOptionsGetBool(PETSC_NULL_OPTIONS, PETSC_NULL_CHARACTER,"-writeall",lwriteall,lflg,ierr) ;call CHKERR(ierr)
 
           call PetscOptionsGetBool(PETSC_NULL_OPTIONS, PETSC_NULL_CHARACTER , "-twostr" , ltwostr , lflg , ierr) ;call CHKERR(ierr)
 
@@ -174,7 +171,6 @@ module m_tenstream_options
             print *,'***   nr. of Nodes:',numnodes
             print *,'***   eddington    ',luse_eddington
             print *,'***   coeff_mode   ',coeff_mode
-            print *,'***   writeall     ',lwriteall
             print *,'***   twostr_only  ',ltwostr_only
             print *,'***   twostr       ',ltwostr
             print *,'***   twostr_guess ',luse_twostr_guess

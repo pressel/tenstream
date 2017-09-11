@@ -4,26 +4,26 @@
 #
 # There may be a maintained(Fabian Jakub) library structure at /home/opt/cosmo_tica_lib/
 # if so, you might get away with copying the following into your .bashrc:
-# 
+#
 #> TICAP=/home/opt/cosmo_tica_lib/
-#> 
+#>
 #> OMPI=1.8.1
 #> export MPI=$TICAP/ompi$OMPI/
 #> export MPIDIR=$MPI/openmpi-$OMPI/install/
-#> 
+#>
 #> if [ -n "$MPIDIR" ]
-#> then 
+#> then
 #>   #echo "setting OpenMPI environment to: $OMPIDIR"
 #>   export PATH=$MPIDIR/bin/:$PATH
 #>   export LD_RUN_PATH=$MPIDIR/lib64/:$LD_RUN_PATH
 #>   export LD_LIBRARY_PATH=$MPIDIR/lib64/:$LD_LIBRARY_PATH
 #>   export MANPATH=$MPIDIR/share/man:$MANPATH
 #> fi
-#>             
+#>
 #> # PETSC
 #> export PETSC_DIR=$MPI/petsc
 #> export PETSC_ARCH=fast_single
-#> 
+#>
 #> # NETCDF
 #> export NETCDFFROOT=$MPI/netcdf-latest/
 #> export NETCDFCROOT=$MPI/netcdf-latest/
@@ -32,7 +32,7 @@
 #> export PATH=$NETCDFFROOT/bin:$NETCDFCROOT/bin:$PATH
 #> export LD_LIBRARY_PATH=$NETCDFFROOT/lib64:$NETCDFCROOT/lib64:$LD_LIBRARY_PATH
 #> export LD_RUN_PATH=$NETCDFFROOT/lib64:$NETCDFCROOT/lib64:$LD_RUN_PATH
-#> 
+#>
 #> # HDF5
 #> export HDF5_DIR=$MPI/hdf5/HDF5-1.8.13-Linux/HDF_Group/HDF5/1.8.13/
 #> export HDF5_ROOT=$HDF5_DIR
@@ -42,13 +42,14 @@
 
 # and use this config file with `cmake <tenstream_root_dir> -DSYST:STRING=lmu_mim`
 
+set(CMAKE_C_COMPILER   "mpicc")
 set(CMAKE_Fortran_COMPILER   "mpif90")
 set(Fortran_COMPILER_WRAPPER "mpif90")
 
-set(USER_C_FLAGS               "-cpp -W -std=c99") 
-set(USER_Fortran_FLAGS         "-cpp -ffree-line-length-none -g") 
-set(USER_Fortran_FLAGS_RELEASE "-fno-backtrace -fno-range-check -O3") 
-set(USER_Fortran_FLAGS_DEBUG   "-fbacktrace -finit-real=nan -W -Wall -Wuninitialized -g -pg -fcheck=all -fbounds-check -pedantic -Wsurprising -ffpe-trap=invalid,zero,overflow -fno-range-check")
+set(USER_C_FLAGS               "-cpp -W -std=c99")
+set(USER_Fortran_FLAGS         "-cpp -ffree-line-length-none -g")
+set(USER_Fortran_FLAGS_RELEASE "-fno-backtrace -fno-range-check -O3")
+set(USER_Fortran_FLAGS_DEBUG   "-fbacktrace -finit-real=nan -W -Wall -Wuninitialized -g -pg -fcheck=all -fbounds-check -pedantic -Wsurprising")
 
 set(NETCDF_DIR      "$ENV{NETCDF}")
 set(NETCDF_DIR_F90  "$ENV{NETCDF}")

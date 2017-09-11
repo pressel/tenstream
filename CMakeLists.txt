@@ -3,10 +3,7 @@ include(CMakeForceCompiler) #Necessary to change between MPI/parallel/profiler c
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/petsc_cmake_modules/")
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/")
 
-
-
 cmake_minimum_required (VERSION 2.8.10)
-
 
 #Load system specific settings
 if (NOT SYST)
@@ -28,9 +25,11 @@ if(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})
 endif()
 
 ########################### Tenstream Project: ###################################
-project (tenstream)
-enable_language(C Fortran)
+project (tenstream C Fortran)
 set(CTEST_CMAKE_GENERATOR "Unix Makefiles")
+
+# For python interfaces need -fPIC:
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 #set(CMAKE_VERBOSE_MAKEFILE ON)
 
@@ -121,6 +120,8 @@ if(AUTODETECT_MPI)
   else(${MPI_Fortran_FOUND})
     message(WARNING "!!!!!!! MPI MISSING")
   endif(${MPI_Fortran_FOUND})
+else(AUTODETECT_MPI)
+    set(MPIEXEC_NUMPROC_FLAG -np) # This is just a wild guess but needed to run tests succesfully
 endif(AUTODETECT_MPI)
 
 # Set Output Directories
@@ -147,17 +148,10 @@ endif(${_is_XLF})
 
 # Add Source Directories
 add_subdirectory (src)
+add_subdirectory (plexrt)
 
 # Documentation targets
-add_custom_target(doc DEPENDS wiki doxygen)
-
-# Add `wiki` submodule
-add_custom_target(wiki 
-  git submodule init tenstream.wiki
-  COMMAND git submodule update --remote tenstream.wiki
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMENT "Updating Wiki submodule" VERBATIM
-  )
+add_custom_target(doc DEPENDS doxygen)
 
 # add a target to generate API documentation with Doxygen
 find_package(Doxygen)
@@ -200,3 +194,19 @@ if(CTAGS_PATH)
         COMMENT "Creating ctags" VERBATIM
         )
 endif(CTAGS_PATH)
+
+option(ENABLE_PYTHON "Enable creation of Python Interfaces via f2py" OFF)
+if(ENABLE_PYTHON)
+  find_program(F2PY_PATH f2py REQUIRED)
+  message(STATUS "Found f2py: ${F2PY_PATH}")
+  add_custom_target(python_interface ALL)
+	add_subdirectory(python)
+endif(ENABLE_PYTHON)
+
+option(ENABLE_C_WRAPPER "Enable creation of C Wrapper " ON)
+if(ENABLE_C_WRAPPER)
+	add_subdirectory(C_wrapper)
+endif(ENABLE_C_WRAPPER)
+
+GET_DIRECTORY_PROPERTY(output INCLUDE_DIRECTORIES)
+MESSAGE(WARNING ${output})

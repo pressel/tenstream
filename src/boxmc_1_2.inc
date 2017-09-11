@@ -5,12 +5,12 @@
 ! it under the terms of the GNU General Public License as published by
 ! the Free Software Foundation, either version 3 of the License, or
 ! (at your option) any later version.
-! 
+!
 ! This program is distributed in the hope that it will be useful,
 ! but WITHOUT ANY WARRANTY; without even the implied warranty of
 ! MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 ! GNU General Public License for more details.
-! 
+!
 ! You should have received a copy of the GNU General Public License
 ! along with this program.  If not, see <http://www.gnu.org/licenses/>.
 !
@@ -18,14 +18,14 @@
 !-------------------------------------------------------------------------
 
 
-subroutine update_dir_stream_1_2(bmc,p,S)
+subroutine update_dir_stream_1_2(bmc,p,T)
     class(t_boxmc_1_2) :: bmc
     type(photon),intent(in) :: p
-    real(ireal_dp),intent(inout) :: S(:)
+    real(ireal_dp),intent(inout) :: T(:)
 
     select case (p%side)
     case(1:2)
-      S(1) = S(1)+p%weight
+      T(1) = T(1)+p%weight
       return
     case default
       print *,'Dont know what to do with this p%side'
@@ -87,6 +87,7 @@ subroutine init_dir_photon_1_2(bmc,p,src,direct,initial_dir,dx,dy,dz)
     p%direct= direct
     p%side = int(nil)
     p%src  = src
+    p%scattercnt  = 0
     p%dir = initial_dir
 
     select type(bmc)
@@ -131,6 +132,7 @@ subroutine init_diff_photon_1_2(bmc,p,src,dx,dy,dz)
     p%direct= .False.
     p%side = int(nil)
     p%src  = src
+    p%scattercnt  = 0
     if(.not. approx( norm(p%dir) ,one ) ) stop 'init_diff_photon_1_2 :: direction was not normed?!'
 
     select type(bmc)
@@ -148,14 +150,14 @@ subroutine intersect_distance_1_2(bmc,p,max_dist)
 
     !crossing with bottom and top plane:
     if(p%dir(3).ge.zero) then
-      max_dist = hit_plane(p,[zero,zero,p%dz ],[zero,zero,one])
-      p%side=1 
+      max_dist = hit_plane(p%loc, p%dir,[zero,zero,p%dz ],[zero,zero,one])
+      p%side=1
       x = p%loc(1)+p%dir(1)*max_dist
       y = p%loc(2)+p%dir(2)*max_dist
       return
     endif
     if(p%dir(3).le.zero) then
-      max_dist = hit_plane(p,[zero,zero,zero ],[zero,zero,one])
+      max_dist = hit_plane(p%loc, p%dir,[zero,zero,zero ],[zero,zero,one])
       p%side=2
       x = p%loc(1)+p%dir(1)*max_dist
       y = p%loc(2)+p%dir(2)*max_dist

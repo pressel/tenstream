@@ -5,12 +5,12 @@
 ! it under the terms of the GNU General Public License as published by
 ! the Free Software Foundation, either version 3 of the License, or
 ! (at your option) any later version.
-! 
+!
 ! This program is distributed in the hope that it will be useful,
 ! but WITHOUT ANY WARRANTY; without even the implied warranty of
 ! MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 ! GNU General Public License for more details.
-! 
+!
 ! You should have received a copy of the GNU General Public License
 ! along with this program.  If not, see <http://www.gnu.org/licenses/>.
 !
@@ -31,7 +31,7 @@
 !!    - setup the matrix structures
 !!    - setup the LUT tables or neural networks for the coefficients
 !!    - setup derivatives for sun directions
-!!    
+!!
 !!  * m_tenstream::set_optical_properties
 !!    - setup the optical properties for next calculation
 !!    - call set_global_optical_properties if only rank 0 has the global info
@@ -46,33 +46,40 @@
 module m_tenstream
 
 #ifdef _XLF
-  use ieee_arithmetic 
+  use ieee_arithmetic
 #define isnan ieee_is_nan
 #endif
 
 #include "petsc/finclude/petsc.h"
   use petsc
 
-  use m_data_parameters, only : ireals,iintegers,       &
-    imp_comm, myid, numnodes,init_mpi_data_parameters,mpiint, &
-    zero,one,nil,i0,i1,i2,i3,i4,i5,i6,i7,i8,i10,pi
+  use m_data_parameters, only : ireals, iintegers,               &
+    imp_comm, myid, numnodes, init_mpi_data_parameters, mpiint,  &
+    zero, one, nil, i0, i1, i2, i3, i4, i5, i6, i7, i8, i10, pi, &
+    default_str_len
 
   use m_twostream, only: delta_eddington_twostream
   use m_schwarzschild, only: schwarzschild
-  use m_helper_functions, only: norm,rad2deg,deg2rad,approx,rmse,delta_scale,imp_bcast,cumsum,inc,mpi_logical_and,imp_allreduce_min,imp_allreduce_max,CHKERR
+  use m_helper_functions, only: norm, rad2deg, deg2rad, &
+    approx, rmse, delta_scale,                          &
+    imp_bcast, mpi_logical_and, imp_allreduce_min,      &
+    imp_allreduce_max, cumsum, inc, CHKERR
+
   use m_eddington, only : eddington_coeff_zdun
   use m_optprop_parameters, only : ldelta_scale
   use m_optprop, only : t_optprop_1_2,t_optprop_8_10
   use m_tenstream_options, only : read_commandline_options, ltwostr, luse_eddington, twostr_ratio, &
     options_max_solution_err, options_max_solution_time, ltwostr_only, luse_twostr_guess,        &
     options_phi, lforce_phi, options_theta, lforce_theta, &
-    lwriteall,lcalc_nca, lskip_thermal, lschwarzschild, ltopography
+    lcalc_nca, lskip_thermal, lschwarzschild, ltopography
 
   implicit none
 
   private
-  public :: init_tenstream, set_angles, set_global_optical_properties, set_optical_properties, solve_tenstream, destroy_tenstream,&
-    getVecPointer,restoreVecPointer, get_mem_footprint, &
+  public :: init_tenstream, set_angles,                                   &
+    set_global_optical_properties, set_optical_properties,                &
+    solve_tenstream, destroy_tenstream,                                   &
+    getVecPointer,restoreVecPointer, get_mem_footprint,                   &
     tenstream_get_result, tenstream_get_result_toZero, need_new_solution, &
     t_coord,C_dir,C_diff,C_one,C_one1,C_one_atm, C_one_atm1
 
@@ -89,7 +96,7 @@ module m_tenstream
     PetscInt :: zs,ze                 ! local domain start and end indices
     PetscInt :: xm,ym,zm              ! size of local domain
     PetscInt :: gxs,gys,gzs           ! domain indices including ghost points
-    PetscInt :: gxe,gye,gze           ! 
+    PetscInt :: gxe,gye,gze           !
     PetscInt :: gxm,gym,gzm           ! size of local domain including ghosts
     PetscInt :: glob_xm,glob_ym,glob_zm ! global domain size
     PetscInt :: dof,dim               ! degrees of freedom of Petsc Domain, dimension of dmda
@@ -126,7 +133,7 @@ module m_tenstream
   type t_sunangles
     real(ireals) :: symmetry_phi
     integer(iintegers) :: yinc,xinc
-    real(ireals) :: theta, phi, costheta, sintheta 
+    real(ireals) :: theta, phi, costheta, sintheta
   end type
   type t_suninfo
     type(t_sunangles),allocatable :: angles(:,:,:) ! defined on DMDA grid
@@ -138,7 +145,7 @@ module m_tenstream
 
   Mat,allocatable :: Mdir,Mdiff
 
-  Vec,save :: incSolar,b
+  Vec,allocatable,save :: incSolar,b
 
   KSP,save :: kspdir, kspdiff
   logical,save :: linit_kspdir=.False., linit_kspdiff=.False.
@@ -159,7 +166,7 @@ module m_tenstream
     logical :: lchanged    = .True.  ! did the flux change recently? -- call restore_solution to bring it in a coherent state
 
     ! save state of solution vectors... they are either in [W](true) or [W/m**2](false)
-    logical :: lintegrated_dir=.True. , lintegrated_diff=.True.  
+    logical :: lintegrated_dir=.True. , lintegrated_diff=.True.
 
     !save error statistics
     real(ireals) :: time   (30) = -one
@@ -169,7 +176,7 @@ module m_tenstream
   end type
   type(t_state_container),save :: solutions(-1000:1000)
 
-contains 
+contains
 
   !> @brief Construct PETSC grid information for regular DMDA
   !> @details setup DMDA grid containers for direct, diffuse and absorption grid
@@ -283,7 +290,7 @@ contains
   end subroutine
 
   !> @brief print information on PETSc Mat :: size and allocated rows
-  !> @details TODO: currently broken -- need to clear what real_kind the returned values should have 
+  !> @details TODO: currently broken -- need to clear what real_kind the returned values should have
   !> \n -- petsc doc says those should be double precision irrespective of petsc real type?? check!
   subroutine mat_info(A)
     Mat :: A
@@ -308,10 +315,10 @@ contains
 
   !> @brief create PETSc matrix and inserts diagonal elements
   !> @details one important step for performance is to set preallocation of matrix structure.
-  !>  \n  i.e. determine the number of local vs. remote number of entries in each row. 
+  !>  \n  i.e. determine the number of local vs. remote number of entries in each row.
   !>  \n  DMDA actually provides a preallocation but this assumes that degrees of freedom on neighbouring boxes are fully connected to local ones.
   !>  \n  this does of course drastically overestimate non-zeros as we need only the streams that actually send radiation in the respective direction.
-  !>  \n  at the moment preallocation routines determine nonzeros by manually checking bounadries -- 
+  !>  \n  at the moment preallocation routines determine nonzeros by manually checking bounadries --
   !>  \n  !todo we should really use some form of iterating through the entries as it is done in the matrix assembly routines and just flag the rows
   subroutine init_Matrix(A,C)!,prefix)
     Mat, allocatable, intent(inout) :: A
@@ -350,11 +357,11 @@ contains
 
     call mat_info(A)
 
-    ! If matrix is resetted, keep nonzero pattern and allow to non-zero allocations -- those should not be many 
+    ! If matrix is resetted, keep nonzero pattern and allow to non-zero allocations -- those should not be many
     ! call MatSetOption(A,MAT_KEEP_NONZERO_PATTERN,PETSC_TRUE,ierr) ;call CHKERR(ierr)
 
     ! pressure mesh  may wiggle a bit and change atm%l1d -- keep the nonzeros flexible
-    !call MatSetOption(A,MAT_NEW_NONZERO_ALLOCATION_ERR,PETSC_FALSE,ierr) ;call CHKERR(ierr) 
+    !call MatSetOption(A,MAT_NEW_NONZERO_ALLOCATION_ERR,PETSC_FALSE,ierr) ;call CHKERR(ierr)
 
     ! call MatSetOption(A,MAT_IGNORE_ZERO_ENTRIES,PETSC_TRUE,ierr) ;call CHKERR(ierr) ! dont throw away the zero -- this completely destroys preallocation performance
 
@@ -808,15 +815,21 @@ contains
     logical,intent(in) :: ldir
     real(ireals),intent(out) :: coeff(:)
 
+    real(ireals) :: aspect, tauz, w0
+
     logical,intent(in) :: lone_dimensional
     real(ireals),intent(in),optional :: angles(2)
 
     call PetscLogStagePush(logstage(7),ierr) ;call CHKERR(ierr)
 
+    aspect = dz / atm%dx
+    tauz = (op%kabs+op%ksca) * dz
+    w0 = op%ksca / (op%kabs+op%ksca)
+
     if(lone_dimensional) then
-      call OPP_1_2%get_coeff(dz,op%kabs,op%ksca,op%g,ldir,coeff,angles)
+      call OPP_1_2%get_coeff (aspect, tauz, w0, op%g,ldir,coeff,angles)
     else
-      call OPP_8_10%get_coeff(dz,op%kabs,op%ksca,op%g,ldir,coeff,angles)
+      call OPP_8_10%get_coeff(aspect, tauz, w0, op%g,ldir,coeff,angles)
     endif
 
     call PetscLogStagePop(ierr) ;call CHKERR(ierr)
@@ -837,7 +850,7 @@ contains
 
     integer(iintegers) :: i,j,k
 
-    real(ireals) :: zm(4), maxheight, global_maxheight 
+    real(ireals) :: zm(4), maxheight, global_maxheight
 
     if(.not.allocated(atm%dz)) stop 'You called  compute_gradient()&
       &but the atm struct is not yet up, make sure we have atm%dz before'
@@ -952,7 +965,7 @@ contains
             !    cycle
             !endif
 
-            do k=C_one%zs,C_one%ze 
+            do k=C_one%zs,C_one%ze
 
 
                 ! Vector of sun direction
@@ -993,7 +1006,7 @@ contains
 
 
   !> @brief set direction where sun stands
-  !> @details save sun azimuth and zenith angle 
+  !> @details save sun azimuth and zenith angle
   !>   \n sun azimuth is reduced to the range of [0,90] and the transmission of direct radiation is contributed for by a integer increment,
   !>   \n determining which neighbouring box is used in the horizontal direction
   subroutine setup_suninfo(phi0, theta0, sun, phi2d, theta2d)
@@ -1006,7 +1019,7 @@ contains
     if(.not.allocated(sun%angles)) &
         allocate(sun%angles(C_one%zs:C_one%ze, C_one%xs:C_one%xe, C_one%ys:C_one%ye))
 
-    if(lforce_phi) then 
+    if(lforce_phi) then
         sun%angles(:,:,:)%phi = options_phi
     else
         if(present(phi2d)) then
@@ -1060,7 +1073,7 @@ contains
         elemental function sym_rot_phi(phi)
             real(ireals) :: sym_rot_phi
             real(ireals),intent(in) :: phi
-            ! ''swap'' phi axis down to the range of [0,180] 
+            ! ''swap'' phi axis down to the range of [0,180]
             sym_rot_phi = acos(cos(deg2rad(phi)))
             !print *,'1st phi swap',phi,' :: ',sym_rot_phi,'=',phi*pi/180,cos(phi*pi/180),acos(cos(phi*pi/180))
             ! and then mirror it onto range [0,90]
@@ -1211,7 +1224,7 @@ contains
     do j=C_dir%ys,C_dir%ye
       do i=C_dir%xs,C_dir%xe
         x4d(i0:i3,C_dir%zs,i,j) = edirTOA* Az * .25_ireals * sun%angles(C_dir%zs,i,j)%costheta
-      enddo 
+      enddo
     enddo
 
     call restoreVecPointer(incSolar,C_dir,x1d,x4d)
@@ -1435,16 +1448,16 @@ contains
 
   contains
     subroutine set_thermal_source()
-      PetscReal :: Ax,Ay,Az,c1,c2,c3,b0,b1,dtau
+      real(ireals) :: Ax,Ay,Az,b0 !,c1,c2,c3,b1,dtau
       real(ireals) :: diff2diff1d(4)
-      PetscReal :: diff2diff(C_diff%dof**2),v(C_diff%dof**2)
+      real(ireals) :: diff2diff(C_diff%dof**2),v(C_diff%dof**2)
 
       if(myid.eq.0.and.ldebug) print *,'Assembly of SRC-Vector ... setting thermal source terms', minval(atm%planck), maxval(atm%planck)
       Az = atm%dx*atm%dy
 
-      do j=C_diff%ys,C_diff%ye         
-        do i=C_diff%xs,C_diff%xe    
-          do k=C_diff%zs,C_diff%ze-1 
+      do j=C_diff%ys,C_diff%ye
+        do i=C_diff%xs,C_diff%xe
+          do k=C_diff%zs,C_diff%ze-1
 
             if( atm%l1d(atmk(k),i,j) ) then
 
@@ -1493,8 +1506,8 @@ contains
 
       ! Thermal emission at surface
       k = C_diff%ze
-      do j=C_diff%ys,C_diff%ye         
-        do i=C_diff%xs,C_diff%xe    
+      do j=C_diff%ys,C_diff%ye
+        do i=C_diff%xs,C_diff%xe
           xsrc(E_up   ,k,i,j) = xsrc(E_up   ,k,i,j) + atm%planck(atmk(k),i,j)*Az *(one-atm%albedo(i,j))*pi
         enddo
       enddo
@@ -1520,9 +1533,9 @@ contains
       call getVecPointer(ledir, C_dir, xedir1d, xedir)
 
       if(myid.eq.0.and.ldebug) print *,'Assembly of SRC-Vector .. setting solar source',sum(xedir(0:3,C_dir%zs:C_dir%ze,C_dir%xs:C_dir%xe,C_dir%ys:C_dir%ye))/size(xedir(0:3,C_dir%zs:C_dir%ze,C_dir%xs:C_dir%xe,C_dir%ys:C_dir%ye))
-      do j=C_diff%ys,C_diff%ye         
-        do i=C_diff%xs,C_diff%xe    
-          do k=C_diff%zs,C_diff%ze-1 
+      do j=C_diff%ys,C_diff%ye
+        do i=C_diff%xs,C_diff%xe
+          do k=C_diff%zs,C_diff%ze-1
 
             if( any (xedir(:,k,i,j) .gt. epsilon(one)) ) then
               if( atm%l1d(atmk(k),i,j) ) then
@@ -1578,7 +1591,7 @@ contains
                     xsrc(E_ri_m , k   , i+1 , j   ) = xsrc(E_ri_m , k   , i+1 , j   ) +  solrad(src) *dir2diff(E_ri_m*C_dir%dof + src)
                     xsrc(E_ri_p , k   , i+1 , j   ) = xsrc(E_ri_p , k   , i+1 , j   ) +  solrad(src) *dir2diff(E_ri_p*C_dir%dof + src)
                   endif
-                  if(lsun_north) then ! likewise if sun shines from forward to backwards, 
+                  if(lsun_north) then ! likewise if sun shines from forward to backwards,
                     xsrc(E_ba_m , k   , i   , j   ) = xsrc(E_ba_m , k   , i   , j   ) +  solrad(src) *dir2diff(E_fw_m*C_dir%dof + src)
                     xsrc(E_ba_p , k   , i   , j   ) = xsrc(E_ba_p , k   , i   , j   ) +  solrad(src) *dir2diff(E_fw_p*C_dir%dof + src)
                     xsrc(E_fw_m , k   , i   , j+1 ) = xsrc(E_fw_m , k   , i   , j+1 ) +  solrad(src) *dir2diff(E_ba_m*C_dir%dof + src)
@@ -1608,8 +1621,8 @@ contains
 
       ! Ground Albedo reflecting direct radiation, the diffuse part is considered by the solver(Matrix)
       k = C_diff%ze
-      do j=C_diff%ys,C_diff%ye     
-        do i=C_diff%xs,C_diff%xe     
+      do j=C_diff%ys,C_diff%ye
+        do i=C_diff%xs,C_diff%xe
           xsrc(E_up   ,k,i,j) = sum(xedir(i0:i3,k,i,j))*atm%albedo(i,j)
         enddo
       enddo
@@ -1770,7 +1783,7 @@ contains
 
 
   !> @brief call PETSc Krylov Subspace Solver
-  !> @details solve with ksp and save residual history of solver 
+  !> @details solve with ksp and save residual history of solver
   !> \n -- this may be handy later to decide next time if we have to calculate radiation again
   !> \n if we did not get convergence, we try again with standard GMRES and a resetted(zero) initial guess -- if that doesnt help, we got a problem!
   subroutine solve(ksp,b,x,solution_uid)
@@ -2106,9 +2119,9 @@ contains
   end subroutine
 
   !> @brief simple schwarzschild solver
-  !> @details Wrapper for the schwarzschild solver for the radiative transfer equation 
+  !> @details Wrapper for the schwarzschild solver for the radiative transfer equation
   !> \n The solver neglects the scattering term and just solves for lambert beerschen transport + emission
-  !> \n This is the simplest radiation solver but quite accurate for thermal calculations 
+  !> \n This is the simplest radiation solver but quite accurate for thermal calculations
   subroutine schwarz(solution)
     type(t_state_container) :: solution
 
@@ -2195,7 +2208,7 @@ contains
     allocate( Edn(C_one_atm1%zs:C_one_atm1%ze) )
 
 
-    do j=C_one_atm%ys,C_one_atm%ye         
+    do j=C_one_atm%ys,C_one_atm%ye
       do i=C_one_atm%xs,C_one_atm%xe
 
         mu0 = sun%angles(C_one_atm1%zs,i,j)%costheta
@@ -2286,8 +2299,8 @@ contains
         Az4 = one/(atm%dx*atm%dy*.25_ireals)
       endif
 
-      do j=C%ys,C%ye         
-        do i=C%xs,C%xe      
+      do j=C%ys,C%ye
+        do i=C%xs,C%xe
           do k=C%zs,C%ze-i1
 
             if(C%dof.eq.i8) then ! This is 8 stream direct radiation
@@ -2337,8 +2350,8 @@ contains
       enddo
 
       k=C%ze
-      do j=C%ys,C%ye         
-        do i=C%xs,C%xe      
+      do j=C%ys,C%ye
+        do i=C%xs,C%xe
 
           if(C%dof.eq.i8) then ! This is 8 stream direct radiation
             xv (i0:i3 ,k,i,j) = xv (i0:i3 ,k,i,j) * Az4
@@ -2350,7 +2363,7 @@ contains
         enddo
       enddo
 
-      if(sun%luse_topography) then ! This is direct rad and we use topography !todo do we need this
+      if(sun%luse_topography) then ! This is direct rad and we use topography !todo do we need this?
         select case (C%dof)
 
         case(i8)
@@ -2429,9 +2442,9 @@ contains
 ! Deprecated --    call getVecPointer(inp ,C ,xinp1d, xinp ,.False.)
 ! Deprecated --    call getVecPointer(local_guess ,C ,xguess1d, xguess ,.True.)
 ! Deprecated --
-! Deprecated --    do j=C%ys,C%ye         
-! Deprecated --      do i=C%xs,C%xe    
-! Deprecated --        do k=C%zs,C%ze-1 
+! Deprecated --    do j=C%ys,C%ye
+! Deprecated --      do i=C%xs,C%xe
+! Deprecated --        do k=C%zs,C%ze-1
 ! Deprecated --          if( .not. atm%l1d(k,i,j) ) then
 ! Deprecated --            call get_coeff(atm%op(k,i,j), atm%dz(k,i,j),.False., diff2diff, atm%l1d(k,i,j) )
 ! Deprecated --            do src=1,C%dof
@@ -2464,9 +2477,12 @@ contains
 
   !> @brief initialize basic memory structs like PETSc vectors and matrices
   subroutine init_memory(incSolar,b)
-    Vec :: b,incSolar
+    Vec, allocatable :: b,incSolar
 
     if(ltwostr_only) return
+
+    if(.not.allocated(incSolar)) allocate(incSolar)
+    if(.not.allocated(b)) allocate(b)
 
     call DMCreateGlobalVector(C_dir%da,incSolar,ierr) ; call CHKERR(ierr)
     call DMCreateGlobalVector(C_diff%da,b,ierr)       ; call CHKERR(ierr)
@@ -2543,18 +2559,18 @@ contains
 
 
     ! init box montecarlo model
-    if(any(atm%l1d.eqv..False.)) call OPP_8_10%init(atm%dx,atm%dy,pack(sun%angles%symmetry_phi,.True.),pack(sun%angles%theta,.True.),imp_comm)
-    if(.not.luse_eddington)      call OPP_1_2%init (atm%dx,atm%dy,pack(sun%angles%symmetry_phi,.True.),pack(sun%angles%theta,.True.),imp_comm) 
+    if(any(atm%l1d.eqv..False.)) call OPP_8_10%init(pack(sun%angles%symmetry_phi,.True.),pack(sun%angles%theta,.True.),imp_comm)
+    if(.not.luse_eddington)      call OPP_1_2%init (pack(sun%angles%symmetry_phi,.True.),pack(sun%angles%theta,.True.),imp_comm)
 
     call init_matrices()
   end subroutine
 
   !> @brief Main routine to setup TenStream solver
   !> @details This will setup the PETSc DMDA grid and set other grid information, needed for the TenStream
-  !> \n Nx, Ny Nz are either global domain size or have to be local sizes if present(nxproc,nyproc) 
+  !> \n Nx, Ny Nz are either global domain size or have to be local sizes if present(nxproc,nyproc)
   !> \n where nxproc and nyproc then are the number of pixel per rank for all ranks -- i.e. sum(nxproc) != Nx_global
   subroutine init_tenstream(icomm, Nz,Nx,Ny, dx,dy, phi0, theta0, dz1d, dz3d, nxproc, nyproc, collapseindex)
-    integer,intent(in) :: icomm !< @param MPI_Communicator which should be used -- this will be used for PETSC_COMM_WORLD
+    MPI_Comm, intent(in)          :: icomm   !< @param MPI_Communicator which should be used -- this will be used for PETSC_COMM_WORLD
     integer(iintegers),intent(in) :: Nz      !< @param[in] Nz     Nz is the number of layers and Nz+1 would be the number of levels
     integer(iintegers),intent(in) :: Nx      !< @param[in] Nx     number of boxes in x-direction
     integer(iintegers),intent(in) :: Ny      !< @param[in] Ny     number of boxes in y-direction
@@ -2570,11 +2586,12 @@ contains
     integer(iintegers),optional,intent(in) :: collapseindex  !< @param[in] collapseindex if given, the upper n layers will be reduce to 1d and no individual output will be given for them
 
     integer(iintegers) :: k,i,j
-    !    character(len=30),parameter :: tenstreamrc='./.tenstreamrc'
+    !    character(default_str_len),parameter :: tenstreamrc='./.tenstreamrc'
 
     if(.not.ltenstream_is_initialized) then
 
-        call setup_petsc_comm
+        PETSC_COMM_WORLD = icomm
+
         !      call PetscInitialize(tenstreamrc ,ierr) ;call CHKERR(ierr)
         call PetscInitialize(PETSC_NULL_CHARACTER ,ierr) ;call CHKERR(ierr)
 #ifdef _XLF
@@ -2675,37 +2692,6 @@ contains
               atm%l1d(C_one_atm%zs:atmk(C_one%zs),:,:) = .True. ! if need to be collapsed, they have to be 1D.
           endif
       end subroutine
-      subroutine setup_petsc_comm()
-          !This is the code snippet from Petsc FAQ to change from PETSC (C) domain splitting to MPI(Fortran) domain splitting 
-          ! the numbers of processors per direction are (int) x_procs, y_procs, z_procs respectively
-          ! (no parallelization in direction 'dir' means dir_procs = 1)
-
-          !        MPI_Comm :: NewComm
-          !        PetscInt :: x,y
-          !
-          !        integer(mpiint) :: orig_id,new_id,petsc_id,ierr ! id according to fortran decomposition
-
-          PETSC_COMM_WORLD = icomm
-
-          !        if(present(nxproc) .and. present(nyproc) ) then
-          !          call MPI_COMM_RANK( icomm, orig_id, ierr )
-          !
-          !          ! calculate coordinates of cpus in MPI ordering:
-          !          x = int(orig_id) / size(nyproc)
-          !          y = modulo(orig_id ,size(nyproc))
-          !
-          !          ! set new rank according to PETSc ordering:
-          !          petsc_id = y*size(nxproc) + x
-          !
-          !          ! create communicator with new ranks according to PETSc ordering:
-          !          call MPI_Comm_split(MPI_COMM_WORLD, i1, petsc_id, NewComm, ierr)
-          !
-          !          ! override the default communicator (was MPI_COMM_WORLD as default)
-          !          PETSC_COMM_WORLD = NewComm
-          !        endif
-          !        print *,'setup_petsc_comm: MPI_COMM_WORLD',orig_id,'calc_id',petsc_id,'PETSC_COMM_WORLD',new_id
-
-      end subroutine
 
   end subroutine
 
@@ -2722,12 +2708,12 @@ contains
       call exit(1)
     endif
 
-    call imp_bcast(imp_comm, albedo, 0_mpiint, myid)
+    call imp_bcast(imp_comm, albedo, 0_mpiint)
 
-    lhave_kabs   = present(global_kabs  ); call imp_bcast(imp_comm, lhave_kabs  , 0_mpiint, myid )
-    lhave_ksca   = present(global_ksca  ); call imp_bcast(imp_comm, lhave_ksca  , 0_mpiint, myid )
-    lhave_g      = present(global_g     ); call imp_bcast(imp_comm, lhave_g     , 0_mpiint, myid )
-    lhave_planck = present(global_planck); call imp_bcast(imp_comm, lhave_planck, 0_mpiint, myid )
+    lhave_kabs   = present(global_kabs  ); call imp_bcast(imp_comm, lhave_kabs  , 0_mpiint)
+    lhave_ksca   = present(global_ksca  ); call imp_bcast(imp_comm, lhave_ksca  , 0_mpiint)
+    lhave_g      = present(global_g     ); call imp_bcast(imp_comm, lhave_g     , 0_mpiint)
+    lhave_planck = present(global_planck); call imp_bcast(imp_comm, lhave_planck, 0_mpiint)
 
     ! Make sure that our domain has at least 3 entries in each dimension.... otherwise violates boundary conditions
     if(myid.eq.0) then
@@ -3127,7 +3113,7 @@ contains
     call prepare_solution( solutions(uid), uid, lsolar=lsolar ) ! setup solution vectors
 
     ! --------- Skip Thermal Computation (-lskip_thermal) --
-    if(lskip_thermal .and. (solutions(uid)%lsolar_rad.eqv..False.) ) then ! 
+    if(lskip_thermal .and. (solutions(uid)%lsolar_rad.eqv..False.) ) then !
       if(ldebug .and. myid.eq.0) print *,'skipping thermal calculation -- returning zero flux'
       call VecSet(solutions(uid)%ediff, zero, ierr); call CHKERR(ierr)
       solutions(uid)%lchanged=.True.
@@ -3149,7 +3135,7 @@ contains
 
     if(ldebug .and. myid.eq.0) print *,'1D calculation done'
 
-    if(present(opt_solution_time) ) then 
+    if(present(opt_solution_time) ) then
       call restore_solution(solutions(uid),opt_solution_time)
     else
       call restore_solution(solutions(uid))
@@ -3194,7 +3180,7 @@ contains
 
   call PetscLogStagePop(ierr) ;call CHKERR(ierr)
 
-  if(present(opt_solution_time) ) then 
+  if(present(opt_solution_time) ) then
     call restore_solution(solutions(uid),opt_solution_time)
   else
     call restore_solution(solutions(uid))
@@ -3207,7 +3193,7 @@ subroutine destroy_tenstream(lfinalizepetsc)
   integer(iintegers) :: uid
   if(present(lfinalizepetsc)) lfinalize = lfinalizepetsc
 
-  if(ltenstream_is_initialized) then 
+  if(ltenstream_is_initialized) then
     if(linit_kspdir) then
       call KSPDestroy(kspdir , ierr) ;call CHKERR(ierr); linit_kspdir =.False.
     endif
@@ -3218,6 +3204,8 @@ subroutine destroy_tenstream(lfinalizepetsc)
     if(.not. ltwostr_only) then
       call VecDestroy(incSolar , ierr) ;call CHKERR(ierr)
       call VecDestroy(b        , ierr) ;call CHKERR(ierr)
+      deallocate(incSolar)
+      deallocate(b)
     endif
     call destroy_matrices()
 
@@ -3245,9 +3233,9 @@ subroutine destroy_tenstream(lfinalizepetsc)
     call OPP_1_2%destroy()
     call OPP_8_10%destroy()
 
-    call DMDestroy(C_dir%da ,ierr); deallocate(C_dir ) 
+    call DMDestroy(C_dir%da ,ierr); deallocate(C_dir )
     call DMDestroy(C_diff%da,ierr); deallocate(C_diff)
-    call DMDestroy(C_one%da ,ierr); deallocate(C_one ) 
+    call DMDestroy(C_one%da ,ierr); deallocate(C_one )
     call DMDestroy(C_one1%da,ierr); deallocate(C_one1)
     call DMDestroy(C_one_atm%da ,ierr); deallocate(C_one_atm)
     call DMDestroy(C_one_atm1%da,ierr); deallocate(C_one_atm1)
@@ -3511,13 +3499,13 @@ function need_new_solution(uid,time)
   real(ireals) :: t(Nfit),tm(Nfit),dt(Nfit-1),err(2, 2*(Nfit-1)), error_estimate
   real(ireals) :: polyc(Nporder+1),estimate(Nporder)
 
-  character(len=50) :: reason
+  character(default_str_len) :: reason
   integer, parameter :: out_unit=20
 
   integer(iintegers) :: k,ipoly
 
   ! Make time an optional argument here for
-  ! convenience of the interface -- 
+  ! convenience of the interface --
   ! otherwise the user needs to check if he
   ! opt_time is present and so on...
   if(.not. present(time)) then
@@ -3527,16 +3515,16 @@ function need_new_solution(uid,time)
 
   if( .not. solutions(uid)%lset ) then !if we did not store a solution, return immediately
     need_new_solution=.True.
-    write(reason,*) 'no solution yet' 
+    write(reason,*) 'no solution yet'
     if(ldebug .and. myid.eq.0) print *,'new calc',need_new_solution,' bc ',reason,' t',time,uid
-    return 
+    return
   endif
 
   if(.not. lenable_solutions_err_estimates) then
     need_new_solution=.True.
-    write(reason,*) 'err.est.thresh.inf.small' 
+    write(reason,*) 'err.est.thresh.inf.small'
     if(ldebug .and. myid.eq.0) print *,'new calc',need_new_solution,' bc ',reason,' t',time,uid
-    return 
+    return
   endif
 
 
@@ -3571,7 +3559,7 @@ function need_new_solution(uid,time)
   ! try several polynomials and find max error:
   do ipoly=1,Nporder
     polyc(1:ipoly+1) = polyfit(err(1,:),err(2,:),ipoly, ierr) ! e.g. second order polynomial has 3 coefficients
-    if(ierr.ne.0) then 
+    if(ierr.ne.0) then
       need_new_solution=.True.
       write(reason,*) 'problem fitting error curve',ierr
       call PetscLogStagePop(ierr) ;call CHKERR(ierr)
@@ -3598,26 +3586,26 @@ function need_new_solution(uid,time)
 
   if(error_estimate.le.options_max_solution_err) then
     need_new_solution=.False.
-    write(reason,*) 'ERR_TOL_IN_BOUND' 
+    write(reason,*) 'ERR_TOL_IN_BOUND'
   else
     need_new_solution=.True.
-    write(reason,*) 'ERR_TOL_EXCEEDED' 
+    write(reason,*) 'ERR_TOL_EXCEEDED'
   endif
 
   if(any(t.lt.zero) ) then
     need_new_solution=.True.
-    write(reason,*) 'FEW_SOLUTIONS' 
+    write(reason,*) 'FEW_SOLUTIONS'
   endif
 
   if(time-solutions(uid)%time(1) .gt. options_max_solution_time) then
     need_new_solution=.True.
-    write(reason,*) 'MIN_TIME_EXCEEDED' 
+    write(reason,*) 'MIN_TIME_EXCEEDED'
   endif
 
   if(time_debug_solutions.gt.zero) then
     if(.not.need_new_solution) then
       need_new_solution=.True. ! overwrite it and calculate anyway
-      write(reason,*) 'MANUAL OVERRIDE' 
+      write(reason,*) 'MANUAL OVERRIDE'
       ! Hack to monitor error growth...
       ! We tell the user that he has to calculate radiation again.
       ! We will calculate and update the solution vectors...
@@ -3777,7 +3765,7 @@ subroutine restore_solution(solution,time)
   type(t_state_container) :: solution
   real(ireals),intent(in),optional :: time
 
-  character(100) :: vecname
+  character(default_str_len) :: vecname
   real(ireals) :: norm1,norm2,norm3
   Vec :: abso_old
 
@@ -3790,12 +3778,12 @@ subroutine restore_solution(solution,time)
     stop 'cant restore solution which was not changed'
 
   if(present(time) .and. lenable_solutions_err_estimates) then ! Create working vec to determine difference between old and new absorption vec
-    call DMGetGlobalVector(C_one%da, abso_old, ierr) ; call CHKERR(ierr) 
+    call DMGetGlobalVector(C_one%da, abso_old, ierr) ; call CHKERR(ierr)
     call VecCopy( solution%abso, abso_old, ierr)     ; call CHKERR(ierr)
   endif
 
   ! make sure to bring the fluxes into [W] for absorption calculation
-  call scale_flx(solution, lWm2_to_W=.True. ) 
+  call scale_flx(solution, lWm2_to_W=.True. )
 
   ! update absorption
   call calc_flx_div(solution)
@@ -3804,7 +3792,7 @@ subroutine restore_solution(solution,time)
     print *,'Saving Solution ',solution%uid
 
   ! make sure to bring the fluxes into [W/m**2]
-  call scale_flx(solution, lWm2_to_W=.False. ) 
+  call scale_flx(solution, lWm2_to_W=.False. )
 
   if(ldebug .and. myid.eq.0) &
     print *,'Saving Solution done'
@@ -3816,14 +3804,14 @@ subroutine restore_solution(solution,time)
     call VecNorm(abso_old ,  NORM_2, norm2, ierr)          ; call CHKERR(ierr)
     call VecNorm(abso_old ,  NORM_INFINITY, norm3, ierr)   ; call CHKERR(ierr)
 
-    call DMRestoreGlobalVector(C_one%da, abso_old, ierr)   ; call CHKERR(ierr) 
+    call DMRestoreGlobalVector(C_one%da, abso_old, ierr)   ; call CHKERR(ierr)
 
     ! Save norm for later analysis
     solution%maxnorm = eoshift ( solution%maxnorm, shift = -1) !shift all values by 1 to the right
     solution%twonorm = eoshift ( solution%twonorm, shift = -1) !shift all values by 1 to the right
     solution%time    = eoshift ( solution%time   , shift = -1) !shift all values by 1 to the right
 
-    solution%maxnorm( 1 ) = norm3 
+    solution%maxnorm( 1 ) = norm3
     solution%twonorm( 1 ) = norm2
     solution%time( 1 )    = time
 
@@ -3835,28 +3823,30 @@ subroutine restore_solution(solution,time)
 
   call PetscLogStagePop(ierr) ;call CHKERR(ierr)
 
-  if(lwriteall) then
-    if(solution%lsolar_rad) then
-      write(vecname,FMT='("edir",I0)') solution%uid
-      call PetscObjectSetName(solution%edir,vecname,ierr) ; call CHKERR(ierr)
-      call vec_to_hdf5(solution%edir)
-    endif
+  if(solution%lsolar_rad) then
+    write(vecname,FMT='("edir",I0)') solution%uid
+    call PetscObjectSetName(solution%edir,vecname,ierr) ; call CHKERR(ierr)
+    call PetscObjectViewFromOptions(solution%edir, PETSC_NULL_VEC, "-show_edir", ierr); call CHKERR(ierr)
+  endif
 
-    write(vecname,FMT='("ediff",I0)') solution%uid
-    call PetscObjectSetName(solution%ediff,vecname,ierr) ; call CHKERR(ierr)
-    call vec_to_hdf5(solution%ediff)
+  write(vecname,FMT='("ediff",I0)') solution%uid
+  call PetscObjectSetName(solution%ediff,vecname,ierr) ; call CHKERR(ierr)
+  call PetscObjectViewFromOptions(solution%ediff, PETSC_NULL_VEC, "-show_ediff", ierr); call CHKERR(ierr)
 
-    write(vecname,FMT='("abso",I0)') solution%uid
-    call PetscObjectSetName(solution%abso,vecname,ierr) ; call CHKERR(ierr)
-    call vec_to_hdf5(solution%abso)
+  write(vecname,FMT='("abso",I0)') solution%uid
+  call PetscObjectSetName(solution%abso,vecname,ierr) ; call CHKERR(ierr)
+  call PetscObjectViewFromOptions(solution%abso, PETSC_NULL_VEC, "-show_abso", ierr); call CHKERR(ierr)
 
+  if(allocated(b)) then
     write(vecname,FMT='("b",I0)') solution%uid
     call PetscObjectSetName(b,vecname,ierr) ; call CHKERR(ierr)
-    call vec_to_hdf5(b)
+    call PetscObjectViewFromOptions(b, PETSC_NULL_VEC, "-show_b", ierr); call CHKERR(ierr)
+  endif
 
+  if(allocated(incSolar)) then
     write(vecname,FMT='("incSolar",I0)') solution%uid
     call PetscObjectSetName(incSolar,vecname,ierr) ; call CHKERR(ierr)
-    call vec_to_hdf5(incSolar)
+    call PetscObjectViewFromOptions(incSolar, PETSC_NULL_VEC, "-show_incSolar", ierr); call CHKERR(ierr)
   endif
 end subroutine
 
@@ -3909,49 +3899,11 @@ subroutine restoreVecPointer(vec,C,x1d,x4d)
   x1d => null()
 end subroutine
 
-subroutine vec_to_hdf5(v)
-  Vec,intent(in) :: v
-#ifdef _PETSC_HAVE_HDF5
-  character(10),parameter :: suffix='.h5'
-  character(110) :: fname
-  logical fexists
-  PetscFileMode :: fmode
-  character(100) :: vecname
-
-  PetscViewer :: view
-
-  PetscErrorCode :: ierr
-
-  call PetscObjectGetName(v,vecname,ierr) ;call CHKERR(ierr)
-
-  fname = 'vecdump' // trim(suffix)
-  inquire(file=trim(fname), exist=fexists)
-
-  if(fexists) then
-    if(myid.eq.0 .and. ldebug)  print *,myid,'appending vector to hdf5 file ',trim(fname),' vecname: ',vecname
-    fmode = FILE_MODE_APPEND
-  else 
-    if(myid.eq.0 .and. ldebug)  print *,myid,'writing vector to hdf5 file ',trim(fname),' vecname: ',vecname
-    fmode = FILE_MODE_WRITE
-  endif
-
-  call PetscViewerHDF5Open(imp_comm,trim(fname),fmode, view, ierr) ;call CHKERR(ierr)
-  call VecView(v, view, ierr) ;call CHKERR(ierr)
-  call PetscViewerDestroy(view,ierr) ;call CHKERR(ierr)
-
-  if(myid.eq.0 .and. ldebug ) print *,myid,'writing to hdf5 file done'
-#else      
-  ! disable debug writing of vectors if we could not bring petsc to compile with hdf5
-  if(myid.eq.0 .and. ldebug ) print *,myid,'Petsc build does not allow writing to hdf5 files'
-#endif
-
-end subroutine
-
 function get_mem_footprint()
   real(ireals) :: get_mem_footprint
   PetscLogDouble :: memory_footprint, petsc_current_mem
   get_mem_footprint = zero
-  
+
   call mpi_barrier(imp_comm, ierr)
   call PetscMemoryGetCurrentUsage(memory_footprint, ierr); call CHKERR(ierr)
 

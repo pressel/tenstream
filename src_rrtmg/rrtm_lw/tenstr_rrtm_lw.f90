@@ -5,12 +5,14 @@ module m_tenstr_rrtm_lw
       use mpi, only : mpi_comm_rank
 
       use m_tenstr_rrtmg_lw_init, only: rrtmg_lw_ini
-      use m_tenstr_parkind, only: im => kind_im, rb => kind_rb
+      use m_tenstr_parkind_lw, only: im => kind_im, rb => kind_rb
       use m_tenstr_rrlw_wvn, only : ngb, wavenum1, wavenum2
       use m_tenstr_parrrtm, only: ngptlw, nbndlw
       use m_tenstr_rrtmg_lw_rad, only: rrtmg_lw
 
-      use m_data_parameters, only : init_mpi_data_parameters, iintegers, ireals, myid, zero, one, i0, i1, mpiint, pi, mpierr
+      use m_data_parameters, only : init_mpi_data_parameters, &
+        iintegers, ireals, myid, zero, one, i0, i1,           &
+        mpiint, pi, mpierr, default_str_len
 
       use m_tenstream, only : init_tenstream, set_optical_properties, solve_tenstream, destroy_tenstream,&
           tenstream_get_result, tenstream_get_result_toZero, C_one, C_one1
@@ -41,19 +43,19 @@ module m_tenstr_rrtm_lw
 
   type t_atm
     real(ireals),allocatable :: plev   (:) ! dim(nlay+1)
-    real(ireals),allocatable :: tlev   (:) ! 
-    real(ireals),allocatable :: zt     (:) ! 
-    real(ireals),allocatable :: h2o_lev(:) ! 
+    real(ireals),allocatable :: tlev   (:) !
+    real(ireals),allocatable :: zt     (:) !
+    real(ireals),allocatable :: h2o_lev(:) !
     real(ireals),allocatable :: o3_lev (:) !
     real(ireals),allocatable :: co2_lev(:) !
     real(ireals),allocatable :: ch4_lev(:) !
     real(ireals),allocatable :: n2o_lev(:) !
     real(ireals),allocatable :: o2_lev (:) !
 
-    real(ireals),allocatable :: play   (:) ! dim(nlay) 
-    real(ireals),allocatable :: zm     (:) ! 
-    real(ireals),allocatable :: dz     (:) ! 
-    real(ireals),allocatable :: tlay   (:) ! 
+    real(ireals),allocatable :: play   (:) ! dim(nlay)
+    real(ireals),allocatable :: zm     (:) !
+    real(ireals),allocatable :: dz     (:) !
+    real(ireals),allocatable :: tlay   (:) !
     real(ireals),allocatable :: h2o_lay(:) !
     real(ireals),allocatable :: o3_lay (:) !
     real(ireals),allocatable :: co2_lay(:) !
@@ -68,6 +70,7 @@ contains
     real(ireals),intent(in),dimension(:) :: plev, tlev
     real(ireals),intent(in),dimension(:),optional :: tlay
 
+<<<<<<< HEAD
     integer(iintegers) ::  errcnt
     logical :: ierr
  
@@ -95,6 +98,35 @@ contains
         print *,'Temperature is very high -- are you sure RRTMG can handle that?', maxval(tlev)
         errcnt = errcnt + 1
     endif 
+=======
+    integer(iintegers) :: ierr, errcnt
+    logical :: lerr
+
+    errcnt = 0
+    lerr = maxval(plev) .gt. 1050
+    if(lerr) then
+      print *,'Pressure above 1050 hPa -- are you sure this is earth?', maxval(plev)
+      errcnt = errcnt+1
+    endif
+
+    lerr = minval(plev) .lt. zero
+    if(lerr) then
+      print *,'Pressure negative -- are you sure this is physically correct?', minval(plev)
+      errcnt = errcnt+1
+    endif
+
+    lerr = minval(tlev) .lt. 180
+    if(lerr) then
+      print *,'Temperature is very low -- are you sure RRTMG can handle that?', minval(tlev)
+      errcnt = errcnt+1
+    endif
+
+    lerr = maxval(tlev) .gt. 400
+    if(lerr) then
+      print *,'Temperature is very high -- are you sure RRTMG can handle that?', maxval(tlev)
+      errcnt = errcnt+1
+    endif
+>>>>>>> upstream/master
 
     if(errcnt.gt.0) then
       print *,'Found wonky input to tenstream_rrtm_lw -- please check! -- will abort now.'
@@ -104,13 +136,13 @@ contains
   end subroutine
 
   subroutine init_tenstream_rrtm_lw(comm, dx, dy, dz, &
-                  phi0, theta0, albedo, atm_filename, &
+                  phi0, theta0, atm_filename,         &
                   xm, ym, zm, nxproc, nyproc)
 
     integer(mpiint), intent(in) :: comm
 
-    real(ireals), intent(in) :: dx, dy, phi0, theta0, albedo, dz(:,:,:)
-    character(len=250), intent(in) :: atm_filename
+    real(ireals), intent(in) :: dx, dy, phi0, theta0, dz(:,:,:)
+    character(default_str_len), intent(in) :: atm_filename
     integer(iintegers),intent(in) :: xm, ym, zm
 
     integer(iintegers),intent(in), optional :: nxproc(:), nyproc(:) ! array containing xm and ym for all nodes :: dim[x-ranks, y-ranks]
@@ -130,14 +162,14 @@ contains
   end subroutine
 
   subroutine tenstream_rrtm_lw(comm, dx, dy, phi0, theta0, albedo, atm_filename, &
-                               edir,edn,eup,abso,                                & 
-                               d_plev, d_tlev, d_tlay, d_h2ovmr, d_o3vmr,       &
+                               edn,eup,abso,                                     &
+                               d_plev, d_tlev, d_tlay, d_h2ovmr, d_o3vmr,        &
                                d_co2vmr, d_ch4vmr, d_n2ovmr,  d_o2vmr,           &
                                d_lwc, d_reliq, nxproc, nyproc, icollapse)
     integer(mpiint), intent(in) :: comm
 
     real(ireals), intent(in) :: dx, dy, phi0, theta0, albedo
-    character(len=250), intent(in) :: atm_filename
+    character(default_str_len), intent(in) :: atm_filename
 
     real(ireals),intent(in) :: d_plev(:,:,:), d_tlev (:,:,:) ! dim(nlay_dynamics+1, nxp, nyp)
 
@@ -166,7 +198,7 @@ contains
     real(rb),allocatable :: col_lwp    (:,:)
     real(rb),allocatable :: col_reliq  (:,:)
 
-    integer(iintegers) :: i, j, k, icol, ib, ig
+    integer(iintegers) :: i, j, k, icol, ib
     integer(iintegers) :: is,ie, js,je, ks,ke,ke1
 
     real(ireals),allocatable :: dz(:,:,:)
@@ -174,11 +206,11 @@ contains
     real(ireals),allocatable, dimension(:,:,:)   :: ksca,g                                ! [nlyr, local_nx, local_ny, ngptlw]
     real(ireals),allocatable, dimension(:,:,:,:) :: kabs,Bfrac                            ! [nlyr, local_nx, local_ny, ngptlw]
     real(ireals),allocatable, dimension(:,:,:,:) :: Blev                                  ! [nlyr+1, local_nx, local_ny, nbndlw]
-    real(ireals),allocatable, dimension(:,:,:)   :: spec_edir,spec_edn,spec_eup,spec_abso ! [nlyr(+1), local_nx, local_ny ]
+    real(ireals),allocatable, dimension(:,:,:)   :: spec_edir, spec_edn,spec_eup,spec_abso! [nlyr(+1), local_nx, local_ny ]
 
-    real(ireals),allocatable, dimension(:,:,:), intent(out) :: edir,edn,eup,abso          ! [nlyr(+1), local_nx, local_ny ]
+    real(ireals),allocatable, dimension(:,:,:), intent(out) :: edn,eup,abso               ! [nlyr(+1), local_nx, local_ny ]
 
-    character(len=80) :: output_path(2) ! [ filename, varname ]
+    ! character(default_str_len) :: output_path(2) ! [ filename, varname ]
 
     call load_atmfile(comm, atm_filename, bg_atm)
 
@@ -317,7 +349,7 @@ contains
 
 
     if(.not.linit_tenstr) then
-      call init_tenstream_rrtm_lw(comm, dx, dy, dz, phi0, theta0, albedo, atm_filename, &
+      call init_tenstream_rrtm_lw(comm, dx, dy, dz, phi0, theta0, atm_filename, &
         ie,je,ke, nxproc, nyproc)
       linit_tenstr=.True.
     endif
@@ -332,13 +364,13 @@ contains
     allocate(spec_abso(C_one%zm , C_one%xm , C_one%ym ))
 
     ! Loop over spectral intervals and call solver
-    do ib=1,ngptlw 
+    do ib=1,ngptlw
       call set_optical_properties(albedo, kabs(:,:,:,ib), ksca(:,:,:), g(:,:,:), Blev(:,:,:,ngb(ib))*Bfrac(:,:,:,ib))
       call solve_tenstream(zero)
       call tenstream_get_result(spec_edir, spec_edn, spec_eup, spec_abso)
 
-      edn  = edn  + spec_edn 
-      eup  = eup  + spec_eup 
+      edn  = edn  + spec_edn
+      eup  = eup  + spec_eup
       abso = abso + spec_abso
     enddo
 
@@ -356,8 +388,8 @@ contains
     real(ireals), intent(in) :: albedo
 
     real(rb),dimension(ncol_in,nlay_in+1) :: plev, tlev
-    real(rb),dimension(ncol_in,nlay_in)   :: tlay, h2ovmr, o3vmr, co2vmr, ch4vmr, n2ovmr, o2vmr 
-    real(rb),dimension(ncol_in,nlay_in)   :: lwp, reliq 
+    real(rb),dimension(ncol_in,nlay_in)   :: tlay, h2ovmr, o3vmr, co2vmr, ch4vmr, n2ovmr, o2vmr
+    real(rb),dimension(ncol_in,nlay_in)   :: lwp, reliq
 
     real(ireals), dimension(:,:,:), intent(out) :: tau, Bfrac ! [ncol, nlay, ngptlw]
 
@@ -369,7 +401,7 @@ contains
 
     real(rb),dimension(ncol_in, nlay_in)   :: cfc11vmr,cfc12vmr,cfc22vmr,ccl4vmr
 
-    real(rb),dimension(ncol_in) :: tsfc 
+    real(rb),dimension(ncol_in) :: tsfc
 
     real(rb),dimension(ncol_in,nlay_in+1) :: lwuflx,lwdflx,lwuflxc,lwdflxc
     real(rb),dimension(ncol_in,nlay_in  ) :: lwhr,lwhrc
@@ -481,7 +513,7 @@ contains
 
   subroutine load_atmfile(comm, atm_filename, atm)
     integer(mpiint), intent(in) :: comm
-    character(len=250), intent(in) :: atm_filename
+    character(default_str_len), intent(in) :: atm_filename
     type(t_atm),allocatable,intent(inout) :: atm
 
     integer(mpiint) :: myid
@@ -514,7 +546,7 @@ contains
       atm%h2o_lev = prof(:,7) / prof(:,4)
       atm%o3_lev  = prof(:,5) / prof(:,4)
       atm%co2_lev = prof(:,8) / prof(:,4)
-      atm%ch4_lev = atm%co2_lev / 1e2        
+      atm%ch4_lev = atm%co2_lev / 1e2
       atm%n2o_lev = prof(:,9) / prof(:,4)
       atm%o2_lev  = prof(:,6) / prof(:,4)
 
@@ -525,15 +557,15 @@ contains
 
       endif
     endif
-    call imp_bcast(comm, atm%plev   , 0_mpiint, myid)
-    call imp_bcast(comm, atm%zt     , 0_mpiint, myid)
-    call imp_bcast(comm, atm%tlev   , 0_mpiint, myid)
-    call imp_bcast(comm, atm%h2o_lev, 0_mpiint, myid)
-    call imp_bcast(comm, atm%o3_lev , 0_mpiint, myid)
-    call imp_bcast(comm, atm%co2_lev, 0_mpiint, myid)
-    call imp_bcast(comm, atm%ch4_lev, 0_mpiint, myid)
-    call imp_bcast(comm, atm%n2o_lev, 0_mpiint, myid)
-    call imp_bcast(comm, atm%o2_lev , 0_mpiint, myid)
+    call imp_bcast(comm, atm%plev   , 0_mpiint)
+    call imp_bcast(comm, atm%zt     , 0_mpiint)
+    call imp_bcast(comm, atm%tlev   , 0_mpiint)
+    call imp_bcast(comm, atm%h2o_lev, 0_mpiint)
+    call imp_bcast(comm, atm%o3_lev , 0_mpiint)
+    call imp_bcast(comm, atm%co2_lev, 0_mpiint)
+    call imp_bcast(comm, atm%ch4_lev, 0_mpiint)
+    call imp_bcast(comm, atm%n2o_lev, 0_mpiint)
+    call imp_bcast(comm, atm%o2_lev , 0_mpiint)
 
     nlev = size(atm%plev)
 
@@ -640,7 +672,7 @@ contains
     ! then from there on couple background atm data on top of that
 
     allocate(col_plev   (ie*je, ke1))
-                                     
+
     allocate(col_tlev   (ie*je, ke1))
     allocate(col_tlay   (ie*je, ke ))
     allocate(col_h2ovmr (ie*je, ke ))
