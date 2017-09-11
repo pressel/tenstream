@@ -17,6 +17,33 @@
 /*  Copyright (C) 2010-2015  Fabian Jakub, <fabian@jakub.com>               */
 /* -------------------------------------------------------------------------*/
 
+// Added by Kyle
+void f2c_test(int fcomm, int *Nx, int *Ny, int *Nz, 
+              double *dx, double* dy, 
+              double *phi0, double* theta0, 
+              double *albedo_thermal, double* albedo_solar, 
+              int *atm_filename_length, char *atm_filename,
+              int *lthermal, int *lsolar,
+              int *Nz_merge, 
+              double **edir, double **edn, double **eup,  
+              double **abso, 
+              double *d_plev, 
+              double *d_tlev,
+              double *d_h2ovmr,                                   
+              double *d_lwc, 
+              double *d_reliq, 
+              double *d_iwc,                                   
+              double *d_reice,
+              int *nprocx,                                      // number of processors in x
+              int *nxproc,                                      // local size of subdomain along x, has size(nprocx)
+              int *nprocy,                                      // number of processors in y
+              int *nyproc);                                      // local size of subdomain along y, has size(nprocy));                                       
+void f2c_init_petsc(void); 
+void f2c_finalize_petsc(void);
+
+// End Added by Kyle 
+
+
 void f2c_tenstream_rrtmg(int fcomm,                   // MPI_Comm_c2f(MPI_COMM_WORLD)
     int *Nz, int *Nx,int *Ny,                         // size of local subdomain
     double *dx, double *dy,                           // horizontal grid spacing in [m]
