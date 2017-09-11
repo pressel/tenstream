@@ -30,9 +30,98 @@ module f2c_tenstream
       implicit none
 
       private
-      public :: f2c_tenstream_rrtmg, f2c_destroy_tenstream_rrtmg
-
+      public :: f2c_tenstream_rrtmg, f2c_destroy_tenstream_rrtmg, f2c_test, f2c_init_petsc, f2c_finalize_petsc
+!      public :: f2c_destroy_tenstream_rrtmg, f2c_test
 contains
+
+
+  subroutine f2c_init_petsc() bind (C)
+    PetscErrorCode ierr
+    call PetscInitialize(".petscrc", ierr)
+    print *, 'Petsc Initialzied' 
+  end subroutine 
+  
+  
+  subroutine f2c_finalize_petsc() bind(C) 
+    PetscErrorCode ierr
+    
+    call PetscFinalize(ierr)
+    print *, 'Petsc Finalized' 
+     
+   end subroutine 
+
+  subroutine f2c_test(comm, &
+                      Nx, Ny, Nz, & 
+                      dx, dy, & 
+                      phi0, theta0, &
+                      albedo_thermal, albedo_solar, & 
+                      atm_filename_length, c_atm_filename, & 
+                      c_lthermal, c_lsolar, & 
+                      Nz_merged, & 
+                      cptr_edir, cptr_edn, cptr_eup, cptr_abso, &
+                      d_plev, d_tlev, d_h2ovmr, d_lwc, d_reliq, d_iwc, d_reice, &
+                      nprocx, nxproc, nprocy, nyproc) bind(C)
+                      
+    integer(c_int), value :: comm
+    integer(c_int), intent(in) :: Nx, Ny, Nz
+    real(c_double), intent(in) :: dx, dy 
+    real(c_double), intent(in) :: phi0, theta0
+    real(c_double), intent(in) :: albedo_thermal, albedo_solar 
+    integer(c_int), intent(in):: atm_filename_length
+    character(kind=c_char,len=1), intent(in) :: c_atm_filename(*)
+    integer(c_int), intent(in) :: c_lthermal, c_lsolar
+    integer(c_int), intent(out) :: Nz_merged 
+    type(c_ptr), intent(out) :: cptr_edir, cptr_edn, cptr_eup      ! fluxes edir, edn, eup have shape(Nz_merged+1, Nx, Ny)
+    type(c_ptr), intent(out) :: cptr_abso                          ! abso just (Nz_merged, Nx, Ny)
+    
+    real(c_double), dimension(Nz+1, Nx, Ny), intent(in) :: d_plev  ! pressure on layer interfaces    [hPa]
+    real(c_double), dimension(Nz+1, Nx, Ny), intent(in) :: d_tlev  ! Temperature on layer interfaces [K]
+    real(c_double), dimension(Nz, Nx, Ny), intent(in)   :: d_h2ovmr  ! qt on interfaces[K]
+    real(c_double), dimension(Nz, Nx, Ny), intent(in)   :: d_lwc   ! liq water content               [g/kg]
+    real(c_double), dimension(Nz, Nx, Ny), intent(in)   :: d_reliq ! effective radius                [micron]
+    real(c_double), dimension(Nz, Nx, Ny), intent(in)   :: d_iwc   ! ice water content               [g/kg]
+    real(c_double), dimension(Nz, Nx, Ny), intent(in)   :: d_reice ! ice effective radius            [micron]
+    
+    integer(c_int), intent(in) :: nprocx, nprocy                  ! number of processors in x and y
+    integer(c_int), intent(in) :: nxproc(nprocx), nyproc(nprocy)  ! local size of subdomain along x and y
+    
+    character(default_str_len) :: atm_filename
+    logical :: lthermal, lsolar
+    
+    
+    ! From here on local variables
+    real(ireals), allocatable, target, save, dimension(:,:,:) :: edir, edn, eup, abso
+    
+    call init_mpi_data_parameters(comm)
+    
+    atm_filename = c_to_f_string(c_atm_filename)
+    lthermal = c_int_2_logical(c_lthermal)
+    lsolar   = c_int_2_logical(c_lsolar)
+    
+    call tenstream_rrtmg(comm, dx, dy, phi0, theta0,  &
+      albedo_thermal, albedo_solar, atm_filename,     &
+      lthermal, lsolar,                               &
+      edir,edn,eup,abso,                              &
+      d_plev, d_tlev, d_h2ovmr=d_h2ovmr, d_lwc=d_lwc, d_reliq=d_reliq,   &
+      d_iwc=d_iwc, d_reice=d_reice,                   &
+      nxproc=nxproc, nyproc=nyproc)    
+    
+    cptr_edir = c_loc(edir)
+    cptr_edn  = c_loc(edn )
+    cptr_eup  = c_loc(eup )
+    cptr_abso = c_loc(abso)
+    Nz_merged = size(abso,dim=1)
+    
+    print *, 'dx, dy', dx, dy 
+    print *, 'Nx, Ny, Nz,', Nx, Ny, Nz 
+    print *, 'phi0, theta0', phi0, theta0 
+    print *, 'albedo_thermal', albedo_thermal, albedo_solar
+    print *, 'atm_filename ', c_atm_filename(1:atm_filename_length)
+    print *, 'c_lthermal, c_lsolar ', c_lthermal, c_lsolar   
+    print *, 'This is a test:', comm
+  end subroutine
+
+
 
   subroutine f2c_tenstream_rrtmg(comm, Nz, Nx, Ny, dx, dy, &
       phi0, theta0, albedo_thermal, albedo_solar,          &
