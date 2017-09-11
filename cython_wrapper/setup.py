@@ -4,7 +4,7 @@ from Cython.Distutils import build_ext
 import mpi4py as mpi4py
 
 #libplexrt.a  libtenstream.a  libtenstr_rrtmg.a  libtenstr_rrtm_lw.a  libtenstr_rrtm_sw.a
-tenstr_lib_path = "/home/pressel/local/tenstream/build/lib/" 
+tenstr_lib_path = "../build/lib/" 
 static_lib = [] 
 static_lib.append(tenstr_lib_path + "libc_tenstream.a") 
 static_lib.append(tenstr_lib_path + "libtenstr_rrtmg.a")
